@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DERMA GUARD — Clinical AI Tele-Dermatology Studio</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Plus Jakarta Sans', 'sans-serif'],
+            mono: ['IBM Plex Mono', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    :root {
+      --bg-outer: #f4f6fa;
+      --panel-border: #243b55;
+      --card-border: #eef2f6;
+      --text-primary: #0a0f1d;
+      --text-muted: #5f6b7c;
+      --text-subtle: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--bg-outer);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+    }
+
+    /* Desktop Outer Framed Shell */
+    @media (min-width: 1024px) {
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.75rem;
+      }
+      .dashboard-frame {
+        border: 1.5px solid rgba(41, 63, 94, 0.42);
+        border-radius: 40px;
+        box-shadow: 0 35px 80px -20px rgba(15, 23, 42, 0.12),
+                    0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+      }
+    }
+
+    /* Soft Scrollbar */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #e2e8f0;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #cbd5e1;
+    }
+
+    /* Interactive 3D Card Hover */
+    .action-card {
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      border: 1px solid #eef2f6;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.03);
+    }
+    .action-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 14px 28px rgba(15, 23, 42, 0.07);
+      border-color: #e2e8f0;
+    }
+
+    /* Ambient Centerpiece Glow Animation */
+    @keyframes starPulse {
+      0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 28px rgba(236, 72, 153, 0.24));
+      }
+      50% {
+        transform: scale(1.025);
+        filter: drop-shadow(0 0 40px rgba(236, 72, 153, 0.38));
+      }
+    }
+    .star-animation {
+      animation: starPulse 5.5s ease-in-out infinite;
+    }
+
+    /* Custom Checkbox */
+    .custom-check {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 17px;
+      height: 17px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 5px;
+      outline: none;
+      cursor: pointer;
+      display: inline-grid;
+      place-content: center;
+      background-color: transparent;
+      transition: all 0.15s ease-in-out;
+    }
+    .custom-check:checked {
+      background-color: #0f172a;
+      border-color: #0f172a;
+    }
+    .custom-check:checked::before {
+      content: "";
+      width: 7px;
+      height: 4px;
+      border-left: 2px solid white;
+      border-bottom: 2px solid white;
+      transform: rotate(-45deg) translate(1px, -1px);
+    }
+
+    /* Active Sidebar Nav Item */
+    .nav-active {
+      background-color: #ffffff !important;
+      color: #000000 !important;
+      font-weight: 700 !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      border: 1px solid #f1f5f9;
+    }
+
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #ffffff !important; padding: 0 !important; }
+      .dashboard-frame { border: none !important; box-shadow: none !important; }
+    }
+  button { min-height:40px; } .tab-view { padding:clamp(20px,3vw,40px)!important; } .tab-view p { line-height:1.65; } .tab-view h1,.tab-view h2,.tab-view h3 { line-height:1.25; } .tab-view input:not([type=checkbox]),.tab-view textarea,.tab-view select { min-height:44px; padding:12px 16px; } #desktopNav { display:grid; gap:8px; } .history-item { padding:12px 0; } button:focus-visible { outline:2px solid #be5277; outline-offset:3px; } @media(max-width:767px){ .tab-view{padding:20px 16px 96px!important;} }
+html,body { width:100%; height:100%; margin:0!important; padding:0!important; overflow:hidden; }
+body { display:block!important; }
+.dashboard-frame { width:100%!important; height:100dvh!important; min-height:0!important; max-height:100dvh!important; max-width:none!important; border:0!important; border-radius:0!important; box-shadow:none!important; }
+#mainViewport { height:100%; min-height:0; justify-content:flex-start!important; }
+.tab-view { flex:1; min-height:0; width:100%; }
+.tab-view:not(.hidden) { max-width:1040px; margin-left:auto; margin-right:auto; }
+#view-dashboard { justify-content:flex-start!important; gap:24px; }
+#leftSidebar { height:100%; overflow:auto; }
+@media(max-width:1023px){#mainViewport{padding-bottom:76px;}}
+.image-empty { display:flex;align-items:center;justify-content:center;background:#f8fafc;color:#94a3b8;border:1px dashed #cbd5e1;border-radius:12px;width:100%;height:100%;min-height:112px;font-size:13px;overflow:hidden; } #uploadedImagePreview { background:#f8fafc; } .tracking-image{height:112px;} .image-empty.hidden{display:none;}
+
+/* Keep content at its natural height so the scroll container includes every action. */
+#mainViewport { overflow-y:auto; overflow-x:hidden; overscroll-behavior-y:contain; }
+#mainViewport > header, #mainViewport > div { flex-shrink:0; }
+#mainViewport > .tab-view { flex:0 0 auto; min-height:auto; }
+@media(max-width:1023px) {
+  #mainViewport { height:100%; padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))!important; scroll-padding-bottom:calc(96px + env(safe-area-inset-bottom,0px)); }
+  #mainViewport > .tab-view { padding-bottom:32px!important; }
+  body > nav { height:calc(64px + env(safe-area-inset-bottom,0px)); padding-bottom:env(safe-area-inset-bottom,0px); }
+  #view-profile input[type=file] { width:100%; min-width:0; }
+  #view-profile .col-span-full { flex-wrap:wrap; }
+}
+
+#view-reports h2 { overflow-wrap:anywhere; }
+@media(min-width:1024px){#mainViewport > header img[alt="DermaGuard"]{display:none;}}
+#view-reports img[alt=DermaGuard] { flex-shrink:0; }
+@media(max-width:767px){#view-reports h2{font-size:16px;line-height:1.4;}#view-reports{overflow-wrap:anywhere;}}
+
+.tracking-card { border:2px solid #e2e8f0!important; cursor:pointer; transition:border-color .15s; }
+.tracking-card[aria-pressed=true],.care-choice[aria-pressed=true] { border-color:#111827!important; box-shadow:0 0 0 1px #111827; }
+.tracking-card:focus-visible,.care-choice:focus-visible { outline:2px solid #be5277; outline-offset:4px; }
+.care-choice { display:flex;flex-direction:column;gap:8px;text-align:left;border:2px solid #e2e8f0;border-radius:16px;padding:16px;background:white;min-height:96px; }
+.care-choice small {color:#64748b;line-height:1.5;}
+[id^="clinicItem"]{border:2px solid #e2e8f0!important;cursor:pointer;}[id^="clinicItem"].clinic-selected{border-color:#111827!important;}[id^="clinicItem"]:focus-visible{outline:2px solid #be5277;outline-offset:4px;}</style>
+</head>
+<body class="selection:bg-black selection:text-white">
+
+  <!-- MAIN APPLICATION SHELL (Full-bleed on Mobile <1024px, Framed 3-Column Studio on Desktop >=1024px) -->
+  <div class="dashboard-frame w-full max-w-[1400px] min-h-screen lg:min-h-[860px] lg:max-h-[92vh] bg-white lg:rounded-[40px] overflow-hidden flex flex-col lg:flex-row relative">
+
+    <!-- ==================== DESKTOP LEFT SIDEBAR (260px, Hidden on Mobile <1024px) ==================== -->
+    <aside id="leftSidebar" class="hidden lg:flex lg:w-[260px] flex-shrink-0 bg-[#fbfcfe] border-r border-[#eaeff5] p-6 flex-col justify-between no-print">
+
+      <div class="space-y-7">
+        <!-- Brand Emblem -->
+        <div class="flex items-center gap-2.5 px-1 pt-1">
+          <img src="/images/dermaguard-logo.svg" alt="DermaGuard" width="32" height="34" class="w-8 h-9 shrink-0"/>
+          <div class="leading-none">
+            <span class="text-[17px] font-black tracking-tight text-black block">DERMA GUARD</span>
+            <span class="text-[10px] font-semibold text-[#64748b] tracking-wider uppercase mt-0.5 block">Skin & care</span>
+          </div>
+        </div>
+
+        <!-- Clean Primary Navigation (Zero numeric/percentage clutter badges) -->
+        <nav class="space-y-1.5" id="desktopNav">
+          <button onclick="switchTab('dashboard')" data-tab="dashboard" class="nav-btn nav-active w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[#475569] hover:text-black text-[14px] font-medium transition-all">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+            </svg>
+            <span>Dashboard</span>
+          </button>
+
+          <button onclick="switchTab('scan')" data-tab="scan" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[#475569] hover:text-black text-[14px] font-medium transition-all">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+            </svg>
+            <span>Scan Studio</span>
+          </button>
+
+          <button onclick="switchTab('progression')" data-tab="progression" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[#475569] hover:text-black text-[14px] font-medium transition-all">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <ellipse cx="12" cy="5" rx="9" ry="3" />
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+              <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3" />
+            </svg>
+            <span>Progression Tracking</span>
+          </button>
+
+          <button onclick="switchTab('clinics')" data-tab="clinics" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[#475569] hover:text-black text-[14px] font-medium transition-all">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+            </svg>
+            <span>Nearby Clinics</span>
+          </button>
+
+          <button onclick="switchTab('reports')" data-tab="reports" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[#475569] hover:text-black text-[14px] font-medium transition-all">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <rect width="7" height="7" x="3" y="3" rx="1" />
+              <rect width="7" height="7" x="14" y="3" rx="1" />
+              <rect width="7" height="7" x="14" y="14" rx="1" />
+              <rect width="7" height="7" x="3" y="14" rx="1" />
+            </svg>
+            <span>Health Reports</span>
+          </button>
+
+          <button onclick="switchTab('profile')" data-tab="profile" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[#475569] hover:text-black text-[14px] font-medium transition-all">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+            </svg>
+            <span>Patient Details</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Bottom Patient Profile Card (Exact #8ea0b7 Slate Card Style) -->
+      <div class="mt-8 bg-[#8ea0b7] rounded-2xl p-3.5 flex flex-col gap-3 text-white shadow-sm">
+        <button type="button" onclick="switchTab('profile')" aria-label="Open patient profile" class="flex items-center gap-2.5 text-left w-full">
+          <img
+            src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=120&h=120&q=80"
+            id="sidebarAvatar" alt="Patient profile"
+            class="w-10 h-10 rounded-xl object-cover border-2 border-white/60 shadow-sm flex-shrink-0"
+          />
+          <div class="overflow-hidden leading-snug">
+            <h4 id="sidebarPatientName" class="text-[13.5px] font-bold text-white tracking-tight truncate">Allison Capshaw</h4>
+            <p id="sidebarPatientLocation" class="text-[11px] text-white/85 font-normal truncate">Chennai, Tamil Nadu</p>
+          </div>
+        </button>
+
+        <button onclick="window.parent.postMessage({type:'dermaguard:logout'},window.location.origin)" class="w-full bg-[#111827] hover:bg-black text-white text-[12px] font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H4v14h5m6-14 7 7-7 7m-6-7h13" />
+          </svg>
+          <span>Log out</span>
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- ==================== CENTRAL VIEWPORT (Flex-1) ==================== -->
+    <main id="mainViewport" class="flex-1 min-w-0 flex flex-col justify-between bg-white overflow-y-auto pb-20 lg:pb-0">
+
+      <!-- Top Workstation Strip -->
+      <header class="px-5 sm:px-8 py-4 border-b border-[#eaeff5] flex flex-wrap items-center justify-between gap-3 bg-white sticky top-0 z-20 no-print">
+        <div class="flex items-center gap-2.5">
+          <img src="/images/dermaguard-logo.svg" alt="DermaGuard" width="32" height="34" class="w-8 h-9 shrink-0"/>
+          <div>
+
+          </div>
+        </div>
+
+        <!-- Language Switcher & Report Shortcut (Zero Pill Discipline: rounded-lg controls) -->
+        <div class="flex items-center gap-2">
+          <div class="inline-flex bg-[#f1f4f9] p-1 rounded-xl border border-slate-200/80">
+            <button onclick="setLanguage('EN')" data-lang="EN" class="lang-btn px-2.5 py-1 rounded-lg bg-black text-white text-[11px] font-bold transition-all">EN</button>
+            <button onclick="setLanguage('TA')" data-lang="TA" class="lang-btn px-2.5 py-1 rounded-lg text-slate-600 hover:text-black text-[11px] font-bold transition-all">தமிழ்</button>
+            <button onclick="setLanguage('TG')" data-lang="TG" class="lang-btn px-2.5 py-1 rounded-lg text-slate-600 hover:text-black text-[11px] font-bold transition-all">Tanglish</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Active Triage Strip (Unboxed High-Contrast Middle-Dot Status) -->
+      <div class="px-5 sm:px-8 py-2.5 bg-[#f8fafc] border-b border-[#eaeff5] flex flex-wrap items-center justify-between gap-2 no-print">
+
+        <button onclick="switchTab('reports')" class="px-3 py-1 rounded-lg bg-black hover:bg-slate-800 text-white text-[11.5px] font-bold transition-all">
+          View Report
+        </button>
+      </div>
+
+      <!-- ==================== VIEW 1: DASHBOARD VIEW (Central Command) ==================== -->
+      <section id="view-dashboard" class="tab-view flex-1 p-5 sm:p-8 flex flex-col justify-between">
+
+        <!-- Central Calibrated Dermoscopy & Radiant Star Centerpiece -->
+        <div class="flex flex-col items-center justify-center text-center my-auto py-1">
+
+          <div class="star-animation relative w-44 h-44 sm:w-52 sm:h-52 flex items-center justify-center mb-2">
+            <svg viewBox="0 0 300 300" class="w-full h-full overflow-visible">
+              <defs>
+                <linearGradient id="verticalGlow" x1="50%" y1="0%" x2="50%" y2="100%">
+                  <stop offset="0%" stop-color="#9333ea" stop-opacity="0.9" />
+                  <stop offset="35%" stop-color="#db2777" stop-opacity="0.95" />
+                  <stop offset="50%" stop-color="#fb923c" stop-opacity="1" />
+                  <stop offset="65%" stop-color="#db2777" stop-opacity="0.95" />
+                  <stop offset="100%" stop-color="#6366f1" stop-opacity="0.85" />
+                </linearGradient>
+                <linearGradient id="horizontalGlow" x1="0%" y1="50%" x2="100%" y2="50%">
+                  <stop offset="0%" stop-color="#f97316" stop-opacity="0.9" />
+                  <stop offset="35%" stop-color="#ec4899" stop-opacity="0.95" />
+                  <stop offset="50%" stop-color="#f59e0b" stop-opacity="1" />
+                  <stop offset="65%" stop-color="#ec4899" stop-opacity="0.95" />
+                  <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.85" />
+                </linearGradient>
+                <radialGradient id="starCore" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="#ffffff" />
+                  <stop offset="25%" stop-color="#fed7aa" />
+                  <stop offset="55%" stop-color="#f43f5e" />
+                  <stop offset="85%" stop-color="#7c3aed" stop-opacity="0.5" />
+                  <stop offset="100%" stop-color="#7c3aed" stop-opacity="0" />
+                </radialGradient>
+              </defs>
+
+              <!-- Outer Calibrated 360° Dermoscopy Reticle Ring -->
+              <circle cx="150" cy="150" r="126" fill="none" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="3 3" />
+              <circle cx="150" cy="150" r="98" fill="none" stroke="#e2e8f0" stroke-width="1" />
+              <text x="150" y="18" text-anchor="middle" class="font-mono text-[9px] fill-slate-400 font-semibold">0°</text>
+              <text x="284" y="153" text-anchor="middle" class="font-mono text-[9px] fill-slate-400 font-semibold">90°</text>
+              <text x="150" y="290" text-anchor="middle" class="font-mono text-[9px] fill-slate-400 font-semibold">180°</text>
+              <text x="16" y="153" text-anchor="middle" class="font-mono text-[9px] fill-slate-400 font-semibold">270°</text>
+
+              <!-- Radiant Star Petals & Crosshair Lines -->
+              <line x1="70" y1="70" x2="230" y2="230" stroke="#f472b6" stroke-width="1.8" opacity="0.45" stroke-linecap="round" />
+              <line x1="230" y1="70" x2="70" y2="230" stroke="#f472b6" stroke-width="1.8" opacity="0.45" stroke-linecap="round" />
+              <line x1="150" y1="25" x2="150" y2="275" stroke="#fb7185" stroke-width="1.2" opacity="0.35" stroke-linecap="round" />
+              <line x1="25" y1="150" x2="275" y2="150" stroke="#fb7185" stroke-width="1.2" opacity="0.35" stroke-linecap="round" />
+
+              <path d="M 150 25 C 135 90 100 135 150 150 C 200 135 165 90 150 25 Z" fill="url(#verticalGlow)" opacity="0.85" />
+              <path d="M 150 275 C 135 210 100 165 150 150 C 200 165 165 210 150 275 Z" fill="url(#verticalGlow)" opacity="0.85" />
+              <path d="M 25 150 C 90 135 135 100 150 150 C 135 200 90 165 25 150 Z" fill="url(#horizontalGlow)" opacity="0.85" />
+              <path d="M 275 150 C 210 135 165 100 150 150 C 165 200 210 165 275 150 Z" fill="url(#horizontalGlow)" opacity="0.85" />
+
+              <g transform="rotate(45 150 150)" opacity="0.55">
+                <path d="M 150 65 C 140 115 120 140 150 150 C 180 140 160 115 150 65 Z" fill="url(#verticalGlow)" />
+                <path d="M 150 235 C 140 185 120 160 150 150 C 180 160 160 185 150 235 Z" fill="url(#verticalGlow)" />
+                <path d="M 65 150 C 115 140 140 120 150 150 C 140 180 115 160 65 150 Z" fill="url(#horizontalGlow)" />
+                <path d="M 235 150 C 185 140 160 120 150 150 C 160 180 185 160 235 150 Z" fill="url(#horizontalGlow)" />
+              </g>
+
+              <circle cx="150" cy="150" r="42" fill="url(#starCore)" />
+              <circle cx="150" cy="150" r="14" fill="#ffffff" opacity="0.92" />
+            </svg>
+          </div>
+
+          <h1 class="text-[30px] sm:text-[38px] font-extrabold text-black tracking-tight leading-tight mb-1">
+            Welcome, <span id="welcomePatientName">Allison</span>!
+          </h1>
+          <p class="text-[15px] sm:text-[16.5px] font-medium text-[#475569] max-w-xl">
+
+          </p>
+
+          <!-- Dynamic AI Clinical Response Box -->
+          <div id="dashboardAiCard" class="hidden mt-4 max-w-[740px] w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-2xl p-4 text-left shadow-xs">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-rose-600" id="dashboardAiBadge">
+                Clinical AI Consultation Output
+              </span>
+              <div class="flex items-center gap-2">
+                <button onclick="speakText(document.getElementById('dashboardAiText').innerText)" class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-black hover:bg-slate-50 flex items-center gap-1">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" />
+                  </svg>
+                  <span>Listen</span>
+                </button>
+                <button onclick="stopSpeech()" class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-600 hover:text-black">
+                  Mute
+                </button>
+              </div>
+            </div>
+            <p id="dashboardAiText" class="text-[13px] text-[#0f172a] leading-relaxed font-medium"></p>
+          </div>
+        </div>
+
+        <!-- 3 Clinical Action Cards (With 3D Gradient SVGs) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5 max-w-[740px] mx-auto w-full my-5">
+
+          <!-- Card 1: Optical Scan Studio -->
+          <div onclick="switchTab('scan')" class="action-card bg-white rounded-2xl p-5 cursor-pointer flex flex-col justify-between select-none">
+            <div>
+              <div class="w-12 h-12 mb-3 flex items-center justify-start">
+                <svg viewBox="0 0 54 54" class="w-11 h-11">
+                  <defs>
+                    <linearGradient id="cardStarGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#fb7185" />
+                      <stop offset="50%" stop-color="#f43f5e" />
+                      <stop offset="100%" stop-color="#c084fc" />
+                    </linearGradient>
+                    <filter id="softStarDrop" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#f43f5e" flood-opacity="0.32" />
+                    </filter>
+                  </defs>
+                  <path d="M 27 4 L 33 18 L 47 18 L 36 27 L 40 41 L 27 33 L 14 41 L 18 27 L 7 18 L 21 18 Z"
+                        fill="url(#cardStarGlow)" stroke="#fb7185" stroke-width="1.5" stroke-linejoin="round" filter="url(#softStarDrop)" />
+                  <path d="M 27 8 L 32 19 L 27 27 L 22 19 Z" fill="#ffffff" opacity="0.35" />
+                </svg>
+              </div>
+              <h3 class="font-extrabold text-[15px] text-black tracking-tight mb-1">Optical Scan Studio</h3>
+              <p class="text-[12.5px] text-[#64748b] leading-[1.35]">Capture live WebRTC dermoscopy or upload high-res lesion images</p>
+            </div>
+          </div>
+
+          <!-- Card 2: Multilingual Voice Triage -->
+          <div onclick="triggerVoiceConsultationCard()" class="action-card bg-white rounded-2xl p-5 cursor-pointer flex flex-col justify-between select-none">
+            <div>
+              <div class="w-12 h-12 mb-3 flex items-center justify-start">
+                <svg viewBox="0 0 54 54" class="w-11 h-11">
+                  <defs>
+                    <linearGradient id="cardPencilGlow" x1="0%" y1="100%" x2="100%" y2="0%">
+                      <stop offset="0%" stop-color="#fb923c" />
+                      <stop offset="50%" stop-color="#e879f9" />
+                      <stop offset="100%" stop-color="#818cf8" />
+                    </linearGradient>
+                    <filter id="softPencilDrop" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#c084fc" flood-opacity="0.35" />
+                    </filter>
+                  </defs>
+                  <path d="M 37 8 C 39 10 40 12 42 14 L 18 38 L 11 41 L 13 34 Z"
+                        fill="url(#cardPencilGlow)" stroke="#818cf8" stroke-width="1.2" stroke-linejoin="round" filter="url(#softPencilDrop)" />
+                  <line x1="33" y1="13" x2="39" y2="19" stroke="white" stroke-width="1.8" opacity="0.6" stroke-linecap="round" />
+                  <path d="M 11 41 L 15 37 L 13 34 Z" fill="#475569" opacity="0.5" />
+                </svg>
+              </div>
+              <h3 class="font-extrabold text-[15px] text-black tracking-tight mb-1">Multilingual Voice Triage</h3>
+              <p class="text-[12.5px] text-[#64748b] leading-[1.35]">Interactive AI audio consultation in English, தமிழ் & Tanglish</p>
+            </div>
+          </div>
+
+          <!-- Card 3: Mohs Clinic Locator -->
+          <div onclick="switchTab('clinics')" class="action-card bg-white rounded-2xl p-5 cursor-pointer flex flex-col justify-between select-none">
+            <div>
+              <div class="w-12 h-12 mb-3 flex items-center justify-start">
+                <svg viewBox="0 0 54 54" class="w-11 h-11">
+                  <defs>
+                    <linearGradient id="cardPaletteGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#fca5a5" />
+                      <stop offset="50%" stop-color="#c084fc" />
+                      <stop offset="100%" stop-color="#a78bfa" />
+                    </linearGradient>
+                    <filter id="softPaletteDrop" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#a855f7" flood-opacity="0.32" />
+                    </filter>
+                  </defs>
+                  <path d="M 27 7 C 14 7 7 15 7 27 C 7 37 15 44 22 44 C 25 44 26 42 26 39 C 26 37 25 35 25 33 C 25 30 28 27 31 27 L 35 27 C 42 27 47 22 47 15 C 47 9 38 7 27 7 Z"
+                        fill="url(#cardPaletteGlow)" filter="url(#softPaletteDrop)" />
+                  <circle cx="16" cy="20" r="3" fill="#ef4444" />
+                  <circle cx="25" cy="15" r="3" fill="#f59e0b" />
+                  <circle cx="34" cy="17" r="3" fill="#3b82f6" />
+                  <circle cx="19" cy="30" r="2.8" fill="#10b981" />
+                </svg>
+              </div>
+              <h3 class="font-extrabold text-[15px] text-black tracking-tight mb-1">Mohs Clinic Locator</h3>
+              <p class="text-[12.5px] text-[#64748b] leading-[1.35]">Immediate geographical routing to verified dermatology centers</p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Clinical Voice & Text Prompt Bar -->
+        <div class="bg-[#f1f4f9] rounded-2xl border border-[#e2e8f0] p-3 sm:p-3.5 max-w-[740px] mx-auto w-full shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+          <div class="flex items-center gap-2.5 px-3 pt-1 pb-2">
+            <svg class="w-4 h-4 text-black flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" />
+            </svg>
+            <input
+              id="promptInput"
+              type="text"
+              placeholder="Ask clinical AI about your scan, risk score, or speak in English / தமிழ் / Tanglish..."
+              class="w-full bg-transparent text-[13.5px] text-black placeholder-[#64748b] font-normal outline-none"
+            />
+          </div>
+
+          <div class="flex items-center justify-between pt-1 flex-wrap gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <button onclick="runDashboardPrompt('Explain my High Risk 92% melanoma staging')" class="bg-white hover:bg-slate-50 text-black text-[12px] font-bold py-1.5 px-3 rounded-xl border border-slate-200/90 shadow-xs transition-all">
+                Explain 92% Risk Staging
+              </button>
+              <button onclick="runDashboardPrompt('What precautions should I follow before biopsy?')" class="bg-white hover:bg-slate-50 text-black text-[12px] font-bold py-1.5 px-3 rounded-xl border border-slate-200/90 shadow-xs transition-all">
+                Pre-Biopsy Precautions
+              </button>
+              <button onclick="runDashboardPrompt('Compare Day 1 vs Day 60 lesion growth')" class="bg-white hover:bg-slate-50 text-black text-[12px] font-bold py-1.5 px-3 rounded-xl border border-slate-200/90 shadow-xs transition-all">
+                Day 1 vs Day 60 Growth
+              </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button id="micBtn" onclick="startVoiceRecognition('promptInput')" class="w-9 h-9 rounded-xl bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 border border-slate-200/80 transition-colors shadow-xs" title="Voice Input">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" />
+                </svg>
+              </button>
+
+              <button onclick="runDashboardPrompt()" class="w-9 h-9 bg-black hover:bg-slate-900 rounded-xl flex items-center justify-center text-white transition-all shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ==================== VIEW 2: SCAN STUDIO VIEW (Dermoscopy Analysis & Patient Description) ==================== -->
+      <section id="view-scan" class="tab-view hidden flex-1 p-5 sm:p-8 max-w-[880px] mx-auto w-full space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Optical Dermoscopy & Staging</span>
+            <h2 class="text-[22px] font-extrabold text-black tracking-tight">Scan Studio & Lesion Analysis</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="cameraToggleBtn" onclick="toggleLiveCamera()" class="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-black text-[12px] font-bold transition-all">
+              Start Live Camera
+            </button>
+            <label class="cursor-pointer bg-black hover:bg-slate-900 text-white text-[12px] font-bold py-2 px-4 rounded-xl transition-all flex items-center gap-1.5">
+              <input type="file" id="scanFileInput" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="handleImageUpload(event)" />
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+              </svg>
+              <span>Upload High-Res Image</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Patient Lesion & Symptoms Description Input -->
+        <div class="action-card bg-white rounded-2xl p-4 space-y-2">
+          <label for="patientSymptomInput" class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">
+            Patient Lesion & Symptoms Description (Onset, Itchiness, Bleeding, or Color Shifts)
+          </label>
+          <textarea
+            id="patientSymptomInput"
+            rows="2"
+            class="w-full rounded-xl bg-[#f8fafc] border border-[#e2e8f0] p-3 text-[13px] text-black placeholder-[#64748b] outline-none focus:border-slate-400"
+            placeholder="Describe when you noticed the spot, any recent size changes, itching, tenderness, or color shifts..."
+          >Darkening mole on upper left back noticed 2 months ago. Edges appear more uneven this month with occasional mild itching.</textarea>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <!-- Left: Optical Capture Viewport (Soft Dermal Gradient Backdrop) -->
+          <div class="action-card bg-[#f8fafc] rounded-2xl p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-2.5">
+              <span class="text-[12px] font-extrabold text-black">Optical Dermoscopy Feed</span>
+              <span id="scanSourceLabel" class="font-mono text-[11px] font-semibold text-[#5f6b7c]">Waiting for image</span>
+            </div>
+
+            <div class="relative h-60 rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center">
+              <video id="webcamVideo" autoplay playsinline class="hidden w-full h-full object-cover"></video>
+              <img id="uploadedImagePreview" alt="Uploaded Lesion" class="hidden w-full h-full object-contain" />
+
+              <!-- Calibrated Dermoscopy Vector Visualization -->
+              <div id="defaultLesionSvg" class="image-empty">Waiting for image</div>
+            </div>
+
+            <p id="scanFindingNote" class="text-[12px] text-[#475569] mt-3 leading-relaxed">Upload a photo to preview it here.</p>
+          </div>
+
+          <!-- Right: Clean Focused Clinical Findings Card -->
+          <div class="action-card bg-white rounded-2xl p-5 flex flex-col justify-between">
+            <div>
+              <div class="flex items-start justify-between pb-3 border-b border-slate-100">
+                <div>
+                  <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Primary Classification</span>
+                  <h3 id="scanDiagTitle" class="text-[20px] font-extrabold text-black mt-0.5">Superficial Spreading Melanoma</h3>
+                </div>
+                <div class="text-right font-mono tabular-nums">
+                  <span id="scanRiskReadout" class="text-[12px] font-extrabold text-rose-600 block">HIGH RISK · 92%</span>
+                  <span class="text-[11px] text-slate-500">6.8 mm Diameter</span>
+                </div>
+              </div>
+
+              <!-- Crisp ABCDE Biometrics Grid -->
+              <div class="grid grid-cols-2 gap-2.5 my-3.5 text-[12px]">
+                <div class="p-3 rounded-xl bg-[#f8fafc] border border-slate-100">
+                  <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Asymmetry</span>
+                  <strong class="font-mono text-black mt-0.5 block tabular-nums">0.84 Bi-Axial</strong>
+                </div>
+                <div class="p-3 rounded-xl bg-[#f8fafc] border border-slate-100">
+                  <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Border Regularity</span>
+                  <strong class="font-mono text-black mt-0.5 block tabular-nums">75% Notched</strong>
+                </div>
+                <div class="p-3 rounded-xl bg-[#f8fafc] border border-slate-100">
+                  <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Color Variegation</span>
+                  <strong class="font-mono text-black mt-0.5 block tabular-nums">Blue-White Veil</strong>
+                </div>
+                <div class="p-3 rounded-xl bg-[#f8fafc] border border-slate-100">
+                  <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Diameter & Evolution</span>
+                  <strong class="font-mono text-rose-600 mt-0.5 block tabular-nums">6.8 mm · Expanding</strong>
+                </div>
+              </div>
+
+              <div class="p-3.5 rounded-xl bg-rose-50/80 border border-rose-200 text-[12px] text-rose-950">
+                <strong class="font-extrabold">Diagnostic Recommendation:</strong> Schedule an excisional biopsy with a certified Mohs dermatologist within 7 days.
+              </div>
+            </div>
+
+            <!-- Focused Actions -->
+            <div class="pt-3.5 mt-3 border-t border-slate-100 flex items-center gap-2.5">
+              <button onclick="saveScanToHistory()" class="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-black text-[12px] font-bold transition-all">
+                Save to Timeline
+              </button>
+              <button onclick="switchTab('reports')" class="flex-1 py-2.5 px-3 rounded-xl bg-black hover:bg-slate-900 text-white text-[12px] font-bold transition-all">
+                Generate Health Report
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== VIEW 3: PROGRESSION TRACKING VIEW (Longitudinal Comparative Staging + AI Consultation) ==================== -->
+      <section id="view-progression" class="tab-view hidden flex-1 p-5 sm:p-8 max-w-[880px] mx-auto w-full space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Longitudinal Comparative Staging</span>
+            <h2 class="text-[22px] font-extrabold text-black tracking-tight">Lesion Progression Tracking</h2>
+          </div>
+          <div class="text-[12px] font-bold text-rose-600 font-mono tabular-nums">
+            One photo per upload · Three-photo comparison
+          </div>
+        </div>
+
+        <!-- 3-Stage Visual Comparison Cards (Day 1 vs Day 30 vs Day 60) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div role="button" tabindex="0" aria-pressed="false" class="tracking-card action-card bg-white rounded-2xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[13px] font-extrabold text-black">Upload 1 · Baseline</span>
+              <span class="text-[11px] font-mono text-slate-500 tabular-nums">—</span>
+            </div>
+            <div class="tracking-image image-empty">Waiting for image</div>
+            <div class="text-[12px] text-[#475569] font-mono tabular-nums">
+              Waiting for image
+            </div>
+          </div>
+
+          <div role="button" tabindex="0" aria-pressed="false" class="tracking-card action-card bg-white rounded-2xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[13px] font-extrabold text-black">Upload 2 · Follow-up</span>
+              <span class="text-[11px] font-mono text-amber-700 font-bold tabular-nums">—</span>
+            </div>
+            <div class="tracking-image image-empty">Waiting for image</div>
+            <div class="text-[12px] text-[#475569] font-mono tabular-nums">
+              Waiting for image
+            </div>
+          </div>
+
+          <div role="button" tabindex="0" aria-pressed="false" class="tracking-card action-card bg-white rounded-2xl p-4  space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-[13px] font-extrabold text-black">Upload 3 · Latest</span>
+              <span class="text-[11px] font-mono text-rose-600 font-extrabold tabular-nums">—</span>
+            </div>
+            <div class="tracking-image image-empty">Waiting for image</div>
+            <div class="text-[12px] text-rose-600 font-mono font-bold tabular-nums">
+              Waiting for image
+            </div>
+          </div>
+        </div>
+
+        <!-- Comparative Delta Metrics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="p-4 rounded-2xl bg-[#f8fafc] border border-[#e2e8f0]">
+            <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Diameter Expansion</span>
+            <strong class="font-mono text-[15px] font-extrabold text-rose-600 mt-1 block tabular-nums">5.9 mm → 6.8 mm (+15.3%)</strong>
+            <span class="text-[11.5px] text-[#5f6b7c] mt-0.5 block">Exceeds 6.0 mm clinical threshold</span>
+          </div>
+          <div class="p-4 rounded-2xl bg-[#f8fafc] border border-[#e2e8f0]">
+            <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Border Irregularity Shift</span>
+            <strong class="font-mono text-[15px] font-extrabold text-black mt-1 block tabular-nums">20% → 75% Irregularity</strong>
+            <span class="text-[11.5px] text-[#5f6b7c] mt-0.5 block">Peripheral scalloped extensions</span>
+          </div>
+          <div class="p-4 rounded-2xl bg-[#f8fafc] border border-[#e2e8f0]">
+            <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Color Variegation Shift</span>
+            <strong class="font-mono text-[15px] font-extrabold text-black mt-1 block tabular-nums">+53% Blue-White Veil</strong>
+            <span class="text-[11.5px] text-[#5f6b7c] mt-0.5 block">Multi-tonal dermal melanin shift</span>
+          </div>
+        </div>
+
+        <!-- Interactive Clinical AI Progression Consultation Assistant -->
+        <div class="action-card bg-white rounded-2xl p-5 space-y-3.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Interactive AI Progression Assistant</span>
+              <h3 class="text-[15px] font-extrabold text-black">Ask AI About Report, Progression Delta, or Next Steps</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="speakText(document.getElementById('progAiResponse').innerText)" class="px-3 py-1 rounded-lg border border-slate-200 text-[11.5px] font-bold text-black hover:bg-slate-50">
+                Listen
+              </button>
+              <button onclick="stopSpeech()" class="px-3 py-1 rounded-lg border border-slate-200 text-[11.5px] font-bold text-slate-600 hover:text-black">
+                Mute
+              </button>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="askProgressionQuestion('Compare Day 1 vs Current')" class="px-3 py-1.5 rounded-xl bg-[#f1f4f9] hover:bg-slate-200/70 text-black text-[12px] font-bold transition-all">
+              Compare Day 1 vs Current
+            </button>
+            <button onclick="askProgressionQuestion('Is this growth dangerous?')" class="px-3 py-1.5 rounded-xl bg-[#f1f4f9] hover:bg-slate-200/70 text-black text-[12px] font-bold transition-all">
+              Is this growth dangerous?
+            </button>
+            <button onclick="askProgressionQuestion('Explain notch & color shift')" class="px-3 py-1.5 rounded-xl bg-[#f1f4f9] hover:bg-slate-200/70 text-black text-[12px] font-bold transition-all">
+              Explain notch & color shift
+            </button>
+          </div>
+
+          <div class="p-3.5 rounded-xl bg-[#f8fafc] border border-[#e2e8f0]">
+            <p id="progAiResponse" class="text-[12.5px] text-slate-900 leading-relaxed font-medium">
+              Day 1 vs Current Comparison: Your lesion expanded from 5.9 mm to 6.8 mm (+15.3% growth) while border notch irregularity increased from 20% to 75%. Combined with the +53% blue-white veil shift, clinical guidelines recommend an urgent excisional biopsy.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <input
+              id="progCustomInput"
+              type="text"
+              placeholder="Ask AI about report, progression delta, or clinical next steps..."
+              class="flex-1 bg-[#f1f4f9] border border-[#e2e8f0] rounded-xl px-3.5 py-2 text-[13px] text-black placeholder-[#64748b] outline-none"
+            />
+            <button onclick="askProgressionQuestion()" class="px-4 py-2 rounded-xl bg-black hover:bg-slate-900 text-white text-[12px] font-bold transition-all">
+              Ask AI
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== VIEW 4: NEARBY CLINICS VIEW (Top Map + Suggestions Below) ==================== -->
+      <section id="view-clinics" class="tab-view hidden flex-1 p-5 sm:p-8 max-w-[880px] mx-auto w-full space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Regional Dermatological Grid</span>
+            <h2 class="text-[22px] font-extrabold text-black tracking-tight">Mohs Surgery & Dermatology Clinic Locator</h2>
+          </div>
+          <div class="flex items-center gap-1.5">
+
+
+
+          </div>
+        </div>
+
+        <!-- TOP SECTION: Interactive Map Canvas with Live Route Polyline -->
+        <div class="action-card bg-white rounded-2xl overflow-hidden">
+          <div class="px-4 py-2.5 bg-[#f8fafc] border-b border-[#e2e8f0] flex items-center justify-between text-[12px]">
+            <span id="mapActiveRouteText" class="font-bold text-black">
+              Nearby care search
+            </span>
+            <span class="font-mono text-[11px] text-emerald-700 font-bold">Profile location</span>
+          </div>
+
+          <div class="relative h-80 sm:h-96 bg-[#f1f4f9] overflow-hidden">
+            <svg id="InteractiveMapSvg" viewBox="0 0 800 260" class="w-full h-full transition-transform duration-300">
+              <rect id="mapCanvasBg" width="800" height="260" fill="#f1f4f9" />
+              <g stroke="#cbd5e1" stroke-width="1">
+                <line x1="0" y1="65" x2="800" y2="65" /><line x1="0" y1="130" x2="800" y2="130" /><line x1="0" y1="195" x2="800" y2="195" />
+                <line x1="160" y1="0" x2="160" y2="260" /><line x1="340" y1="0" x2="340" y2="260" /><line x1="520" y1="0" x2="520" y2="260" /><line x1="680" y1="0" x2="680" y2="260" />
+              </g>
+              <path d="M 0 185 Q 280 160 480 110 T 800 60" fill="none" stroke="#94a3b8" stroke-width="5" opacity="0.4" />
+
+              <!-- Highlighted Route Polyline -->
+              <polyline id="mapRouteLine" points="160,185 260,155 360,115 460,90" fill="none" stroke="#f43f5e" stroke-width="3.5" stroke-dasharray="7 4" />
+
+              <!-- Patient Location Marker -->
+              <g transform="translate(160, 185)">
+                <circle r="9" fill="#0f172a" opacity="0.18" />
+                <circle r="4.5" fill="#0f172a" stroke="#ffffff" stroke-width="2" />
+                <text x="12" y="4" class="text-[11px] font-bold fill-slate-900">Your Location</text>
+              </g>
+
+              <!-- Clinic Pin 1 -->
+              <g onclick="highlightClinic(0)" class="cursor-pointer" transform="translate(460, 90)">
+                <circle r="8" fill="#f43f5e" stroke="#ffffff" stroke-width="2" />
+                <text x="12" y="4" class="text-[11px] font-extrabold fill-slate-900">Apollo City Skin & Mohs (4.2 km)</text>
+              </g>
+
+              <!-- Clinic Pin 2 -->
+              <g onclick="highlightClinic(1)" class="cursor-pointer" transform="translate(610, 165)">
+                <circle r="7" fill="#0f172a" stroke="#ffffff" stroke-width="2" />
+                <text x="12" y="4" class="text-[11px] font-bold fill-slate-800">KMC Melanoma & Laser Unit (5.1 km)</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        <!-- BOTTOM SECTION: Verified Mohs & Dermatology Clinics List -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div id="clinicItem0" tabindex="0" role="group" aria-label="Apollo clinic" onclick="highlightClinic(0)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();highlightClinic(0)}" class="action-card bg-white rounded-2xl p-5  flex flex-col justify-between">
+            <div>
+              <span class="text-[10px] tracking-wider uppercase font-semibold text-rose-600 block">Mohs Micrographic Surgery · Cutaneous Oncology</span>
+              <h3 class="text-[16px] font-extrabold text-black mt-0.5">Apollo City Skin & Mohs Center</h3>
+              <p class="font-mono text-[11.5px] font-bold text-emerald-700 mt-1 tabular-nums">
+                4.2 km · Open Now · Next Slot Today
+              </p>
+              <p class="text-[12px] text-[#64748b] mt-2">21 Greams Lane, Thousand Lights, Chennai 600006</p>
+              <p class="font-mono text-[12px] font-semibold text-black mt-1">+91 44 2829 3333</p>
+            </div>
+            <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <button onclick="highlightClinic(0)" class="px-3.5 py-2 rounded-xl bg-[#f1f4f9] hover:bg-slate-200 text-black text-[12px] font-bold">
+                Show on Map
+              </button>
+              <a href="https://www.google.com/maps/dir/?api=1&destination=Apollo+Hospital+Greams+Road+Chennai" target="_blank" rel="noopener noreferrer" class="px-4 py-2 rounded-xl bg-black hover:bg-slate-900 text-white text-[12px] font-bold">
+                Get Driving Directions
+              </a>
+            </div>
+          </div>
+
+          <div id="clinicItem1" tabindex="0" role="group" aria-label="KMC clinic" onclick="highlightClinic(1)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();highlightClinic(1)}" class="action-card bg-white rounded-2xl p-5 flex flex-col justify-between">
+            <div>
+              <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Excisional Biopsy · Derm-Pathology</span>
+              <h3 class="text-[16px] font-extrabold text-black mt-0.5">KMC Melanoma & Laser Care Unit</h3>
+              <p class="font-mono text-[11.5px] font-bold text-emerald-700 mt-1 tabular-nums">
+                5.1 km · Open Now · Walk-In Biopsy Triage
+              </p>
+              <p class="text-[12px] text-[#64748b] mt-2">822 Poonamallee High Rd, Kilpauk, Chennai 600010</p>
+              <p class="font-mono text-[12px] font-semibold text-black mt-1">+91 44 2836 4951</p>
+            </div>
+            <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <button onclick="highlightClinic(1)" class="px-3.5 py-2 rounded-xl bg-[#f1f4f9] hover:bg-slate-200 text-black text-[12px] font-bold">
+                Show on Map
+              </button>
+              <a href="https://www.google.com/maps/dir/?api=1&destination=Kilpauk+Medical+College+Chennai" target="_blank" rel="noopener noreferrer" class="px-4 py-2 rounded-xl bg-black hover:bg-slate-900 text-white text-[12px] font-bold">
+                Get Driving Directions
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== VIEW 5: HEALTH REPORTS VIEW (Institutional Staging Summary) ==================== -->
+      <section id="view-reports" class="tab-view hidden flex-1 p-5 sm:p-8 max-w-[880px] mx-auto w-full space-y-5">
+        <div class="action-card bg-white rounded-2xl p-6 sm:p-8 space-y-6">
+
+          <!-- Institutional Letterhead -->
+          <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-5">
+            <div class="flex items-center gap-3">
+              <img src="/images/dermaguard-logo.svg" alt="DermaGuard" width="32" height="34" class="w-8 h-9 shrink-0"/>
+              <div>
+                <h2 class="text-[19px] font-extrabold text-black tracking-tight">DERMAGUARD HEALTH REPORT</h2>
+                <p class="text-[12px] text-[#64748b]">Skin observations & photo history</p>
+              </div>
+            </div>
+            <button onclick="window.print()" class="bg-black hover:bg-slate-900 text-white text-[12px] font-bold py-2 px-4 rounded-xl transition-all flex items-center gap-1.5 no-print">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M7.5 12 12 16.5m0 0L16.5 12M12 16.5V3" />
+              </svg>
+              <span>Print / Save PDF</span>
+            </button>
+          </div>
+
+          <!-- Patient Record Block -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-xl bg-[#f8fafc] border border-[#e2e8f0] text-[12.5px]">
+            <div>
+              <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Patient Name</span>
+              <strong id="reportPatientName" class="text-black mt-0.5 block">Allison Capshaw</strong>
+            </div>
+            <div>
+              <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Anatomical Site</span>
+              <strong class="text-black mt-0.5 block">Skin observation</strong>
+            </div>
+            <div>
+              <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Risk Stratification</span>
+              <strong class="text-rose-600 font-extrabold mt-0.5 block">HIGH RISK · 92%</strong>
+            </div>
+            <div>
+              <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Date Issued</span>
+              <strong class="font-mono text-black mt-0.5 block tabular-nums">04 Nov 2026</strong>
+            </div>
+          </div>
+
+          <!-- Complete ABCDE Biometric Breakdown Table -->
+          <div class="overflow-x-auto rounded-xl border border-[#e2e8f0]">
+            <table class="w-full text-left border-collapse text-[12.5px]">
+              <thead>
+                <tr class="bg-[#f8fafc] border-b border-[#e2e8f0] text-[10px] tracking-wider uppercase font-semibold text-slate-500">
+                  <th class="py-3 px-4">Biometric Parameter</th>
+                  <th class="py-3 px-4">Measured Value</th>
+                  <th class="py-3 px-4">Clinical Interpretation</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr>
+                  <td class="py-3 px-4 font-bold text-black">Asymmetry</td>
+                  <td class="py-3 px-4 font-mono tabular-nums">0.84 Index</td>
+                  <td class="py-3 px-4 text-[#475569]">Bi-axial structural and pigment network asymmetry</td>
+                </tr>
+                <tr>
+                  <td class="py-3 px-4 font-bold text-black">Border Irregularity</td>
+                  <td class="py-3 px-4 font-mono tabular-nums">75% Notched</td>
+                  <td class="py-3 px-4 text-[#475569]">Scalloped peripheral extensions (increased from 20%)</td>
+                </tr>
+                <tr>
+                  <td class="py-3 px-4 font-bold text-black">Color Variegation</td>
+                  <td class="py-3 px-4 font-mono tabular-nums">4 Pigment Zones</td>
+                  <td class="py-3 px-4 text-[#475569]">Dark brown, black, and central blue-white veil</td>
+                </tr>
+                <tr>
+                  <td class="py-3 px-4 font-bold text-black">Diameter & Evolution</td>
+                  <td class="py-3 px-4 font-mono font-bold text-rose-600 tabular-nums">6.8 mm (+15.3%)</td>
+                  <td class="py-3 px-4 text-[#475569]">Exceeds 6.0 mm threshold with radial progression</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Attending Physician Sign-off Block -->
+          <div class="p-4 rounded-xl bg-[#f8fafc] border border-[#e2e8f0] flex flex-wrap items-center justify-between gap-3 text-[12px]">
+            <div>
+              <strong class="text-black block">Attending Tele-Dermatology Referral Protocol</strong>
+              <span class="text-[#5f6b7c]">Immediate referral to Apollo City Skin & Mohs Center for full-thickness excisional biopsy.</span>
+            </div>
+            <span class="font-mono text-[11px] font-bold text-slate-700">Verified Clinical Record</span>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ==================== VIEW 6: PATIENT DETAILS VIEW (Clean Account & Location Settings) ==================== -->
+      <section id="view-profile" class="tab-view hidden flex-1 p-5 sm:p-8 max-w-[780px] mx-auto w-full space-y-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <span class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block">Personal & Regional Routing Settings</span>
+            <h2 class="text-[22px] font-extrabold text-black tracking-tight">Patient Details & Location</h2>
+          </div>
+          <span id="profileSavedToast" class="hidden text-[12px] font-bold text-emerald-700">Changes Saved</span>
+        </div>
+
+        <div class="action-card bg-white rounded-2xl p-6 space-y-4 text-[13px]">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="col-span-full flex items-center gap-4"><img id="profileAvatarPreview" src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&amp;fit=crop&amp;w=120&amp;h=120&amp;q=80" alt="Profile preview" style="width:80px;height:80px;object-fit:cover;border-radius:20px"/><label class="text-sm font-semibold">Profile photo<input id="profileAvatarInput" type="file" accept="image/jpeg,image/png,image/webp" class="block mt-2"/><span class="block text-xs text-slate-500 mt-2">JPEG, PNG or WebP, up to 5 MB.</span></label><p id="profilePhotoError" role="status"></p></div><div>
+              <label class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block mb-1">Full Name</label>
+              <input id="inputPatientName" type="text" value="Allison Capshaw" class="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-3.5 py-2.5 text-black font-semibold outline-none focus:border-black" />
+            </div>
+            <div>
+              <label class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block mb-1">Email Address</label>
+              <input id="inputPatientEmail" type="email" value="allison.capshaw@dermaguard.ai" class="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-3.5 py-2.5 text-black outline-none focus:border-black" />
+            </div>
+            <div>
+              <label class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block mb-1">Contact Phone Number</label>
+              <input id="inputPatientPhone" type="tel" value="+91 98401 22310" class="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-3.5 py-2.5 font-mono text-black outline-none focus:border-black" />
+            </div>
+            <div>
+              <label class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block mb-1">City / Region</label>
+              <input id="inputPatientCity" type="text" value="Chennai, Tamil Nadu" class="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-3.5 py-2.5 text-black outline-none focus:border-black" />
+            </div>
+            <div>
+              <label class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block mb-1">Preferred Consultation Language</label>
+              <select id="inputPatientLang" onchange="setLanguage(this.value)" class="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-3.5 py-2.5 text-black font-semibold outline-none focus:border-black">
+                <option value="EN">English</option>
+                <option value="TA">தமிழ் (Tamil)</option>
+                <option value="TG">Tanglish</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block mb-1">Street Address</label>
+              <input id="inputPatientStreet" type="text" value="14 Cathedral Road, Gopalapuram, Chennai" class="w-full rounded-xl border border-slate-200 bg-[#f8fafc] px-3.5 py-2.5 text-black outline-none focus:border-black" />
+            </div>
+            <div class="sm:col-span-2">
+              <label class="text-[10px] tracking-wider uppercase font-semibold text-slate-500 block mb-1">Additional Notes / Clinical Remarks</label>
+              <textarea id="inputPatientNotes" rows="3" class="w-full rounded-xl border border-slate-200 bg-[#f8fafc] p-3.5 text-black outline-none focus:border-black">Prefer afternoon tele-dermatology consultations. Sensitive sun-exposed skin.</textarea>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+            <button onclick="savePatientDetails()" class="px-5 py-2.5 rounded-xl bg-black hover:bg-slate-900 text-white text-[12.5px] font-bold transition-all">
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ==================== DESKTOP RIGHT CLINICAL DRAWER (300px, Hidden on Mobile <1024px) ==================== -->
+    <aside id="rightSidebar" class="hidden lg:flex lg:w-[300px] flex-shrink-0 bg-white border-l border-[#eaeff5] p-6 flex-col justify-between no-print">
+
+      <div class="flex flex-col gap-4 overflow-hidden">
+        <div class="flex items-center justify-between">
+          <h2 class="text-[16px] font-black text-black tracking-tight">Scan & AI history</h2>
+          <button onclick="switchTab('scan')" class="w-6 h-6 rounded-md border border-slate-300 flex items-center justify-center hover:bg-slate-50 transition-colors" title="New Scan">
+            <svg class="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="relative">
+          <svg class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+          </svg>
+          <input
+            id="historySearchInput"
+            type="text"
+            placeholder="Search clinical scans..."
+            class="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl py-1.5 pl-8 pr-3 text-[12.5px] text-black placeholder-slate-400 outline-none focus:border-slate-400 transition-colors"
+          />
+        </div>
+
+        <div id="scanHistoryList" class="space-y-4 overflow-y-auto max-h-[540px] pr-1">
+
+          <!-- Item 1: Active Scapular Case -->
+          <div onclick="switchTab('reports')" class="history-item flex items-start gap-2.5 cursor-pointer group">
+            <input type="checkbox" checked class="custom-check mt-0.5 flex-shrink-0" />
+            <div class="flex-1 min-w-0">
+              <h4 class="text-[13px] font-bold text-black truncate leading-tight">Skin observation</h4>
+              <p class="text-[11px] text-rose-600 font-semibold truncate mb-2"></p>
+              <div class="flex items-center justify-between">
+                <div class="flex -space-x-1.5 overflow-hidden">
+                  <button type="button" onclick="event.stopPropagation();switchTab('profile')" aria-label="Open patient profile"><img class="inline-block h-5 w-5 rounded-full ring-2 ring-white object-cover" src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=60&h=60&q=80" alt="Patient" /></button>
+
+                </div>
+                <span class="text-[11px] text-[#94a3b8] font-medium">Current</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 2: Dermoscopy Silhouette Preview Card -->
+          <div onclick="switchTab('scan')" class="history-item flex items-start gap-2.5 cursor-pointer group">
+            <input type="checkbox" class="custom-check mt-0.5 flex-shrink-0" />
+            <div class="flex-1 min-w-0">
+              <h4 class="text-[13px] font-bold text-black truncate leading-tight">Optical Dermoscopy Capture</h4>
+              <p class="text-[11px] text-[#64748b] truncate mb-2">Your latest uploaded photo</p>
+
+              <div id="historyScanPreview" class="image-empty mb-2" style="height:96px;min-height:96px">Waiting for image</div>
+
+              <div class="flex items-center justify-between">
+                <button type="button" onclick="event.stopPropagation();switchTab('profile')" aria-label="Open patient profile"><img class="inline-block h-5 w-5 rounded-full ring-2 ring-white object-cover" src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=60&h=60&q=80" alt="Patient" /></button>
+                <span class="text-[11px] text-[#94a3b8] font-medium">Latest upload</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 3: Longitudinal Progression -->
+          <div onclick="switchTab('progression')" class="history-item flex items-start gap-2.5 cursor-pointer group">
+            <input type="checkbox" class="custom-check mt-0.5 flex-shrink-0" />
+            <div class="flex-1 min-w-0">
+              <h4 class="text-[13px] font-bold text-black truncate leading-tight">Day 1 to Day 60 Comparison</h4>
+              <p class="text-[11px] text-[#64748b] truncate mb-1">Compare your uploaded photos</p>
+              <span class="text-[11px] text-[#94a3b8] font-medium">Baseline Log</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="pt-3">
+        <button onclick="switchTab('scan')" class="w-full bg-black hover:bg-slate-900 text-white text-[13px] font-extrabold py-3 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center">
+          Start new skin scan
+        </button>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- ==================== MOBILE FIXED BOTTOM NAVIGATION DOCK (<1024px, h-16, 54px+ Touch Targets) ==================== -->
+  <nav class="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t border-slate-200 grid grid-cols-5 z-50 no-print">
+    <button onclick="switchTab('dashboard')" data-mob="dashboard" class="mob-nav-btn min-h-[54px] flex flex-col items-center justify-center gap-0.5 text-black font-bold text-[10.5px]">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+      </svg>
+      <span>Dashboard</span>
+    </button>
+
+    <button onclick="switchTab('scan')" data-mob="scan" class="mob-nav-btn min-h-[54px] flex flex-col items-center justify-center gap-0.5 text-slate-500 font-medium text-[10.5px]">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+      </svg>
+      <span>Scan</span>
+    </button>
+
+    <button onclick="switchTab('progression')" data-mob="progression" class="mob-nav-btn min-h-[54px] flex flex-col items-center justify-center gap-0.5 text-slate-500 font-medium text-[10.5px]">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <ellipse cx="12" cy="5" rx="9" ry="3" />
+        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+        <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3" />
+      </svg>
+      <span>Tracking</span>
+    </button>
+
+    <button onclick="switchTab('clinics')" data-mob="clinics" class="mob-nav-btn min-h-[54px] flex flex-col items-center justify-center gap-0.5 text-slate-500 font-medium text-[10.5px]">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+      </svg>
+      <span>Nearby</span>
+    </button>
+
+    <button onclick="switchTab('profile')" data-mob="profile" class="mob-nav-btn min-h-[54px] flex flex-col items-center justify-center gap-0.5 text-slate-500 font-medium text-[10.5px]">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+      </svg>
+      <span>Patient</span>
+    </button>
+  </nav>
+
+  <!-- ==================== INTERACTIVE CLINICAL LOGIC ==================== -->
+  <script>
+    let currentLang = 'EN';
+    let liveStream = null;
+    let currentZoom = 1;
+    let isSatellite = false;
+
+    const clinicalKnowledge = {
+      EN: {
+        staging: "Based on your Skin observation dermoscopy scan (), the model identified bi-axial asymmetry (0.84) and a central blue-white veil. Schedule an excisional biopsy at Apollo City Skin & Mohs Center within 7 days.",
+        precautions: "Pre-Biopsy Protocol: 1. Protect the lesion from direct UV sunlight. 2. Do not apply over-the-counter hydrocortisone or retinoid creams. 3. Avoid scratching or friction on the upper left back.",
+        progression: "Day 1 vs Day 60 Comparison: Diameter expanded from 5.9 mm to 6.8 mm (+15.3% growth), peripheral border irregularity shifted from 20% to 75%, and color variegation increased by +53%."
+      },
+      TA: {
+        staging: "உங்கள் இடது தோள்பட்டை ஸ்கேன் முடிவின்படி (High Risk · 92% · 6.8 mm), ஒழுங்கற்ற விளிம்புகள் மற்றும் நிற மாற்றம் கண்டறியப்பட்டுள்ளது. உடனடியாக அப்போலோ தோல் சிகிச்சை மையத்தில் பரிசோதனை செய்யவும்.",
+        precautions: "முன்னெச்சரிக்கை வழிமுறைகள்: 1. வெயிலில் நேரடியாகப் படுவதைத் தவிர்க்கவும். 2. மருத்துவர் ஆலோசனையின்றி எந்தக் களிம்புகளும் தடவ வேண்டாம்.",
+        progression: "முதல் நாள் (5.9 மி.மீ) முதல் 60-வது நாள் (6.8 மி.மீ) வரை மச்சத்தின் அளவு 15.3% அதிகரித்துள்ளது. உடனடி மருத்துவ ஆலோசனை அவசியம்."
+      },
+      TG: {
+        staging: "Unga Upper Left Back scan-la High Risk (92% Confidence · 6.8 mm) Melanoma pattern detect aagirukku. Irregular borders matrum blue-white veil irukkuradhal udane Apollo Mohs Center-la biopsy edukkanum.",
+        precautions: "Precautions: 1. Direct sunlight avoid pannunga. 2. Lesion mela endha cream illa ointment podadhinga. 3. Nearby Clinics tab-la irukkura specialist-ai paarunga.",
+        progression: "Day 1-la 5.9 mm irundha lesion Day 60-la 6.8 mm (+15.3% growth) aagirukku. Border notch irregularity 20%-la irundhu 75%-ku increase aagirukku."
+      }
+    };
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-view').forEach(view => view.classList.add('hidden'));
+      const target = document.getElementById(`view-${tabName}`);
+      if (target) target.classList.remove('hidden');
+
+      // Desktop Sidebar Active Highlight
+      document.querySelectorAll('#desktopNav .nav-btn').forEach(btn => {
+        if (btn.getAttribute('data-tab') === tabName) {
+          btn.classList.add('nav-active');
+        } else {
+          btn.classList.remove('nav-active');
+        }
+      });
+
+      // Mobile Bottom Dock Active Highlight
+      document.querySelectorAll('.mob-nav-btn').forEach(btn => {
+        if (btn.getAttribute('data-mob') === tabName) {
+          btn.className = 'mob-nav-btn min-h-[54px] flex flex-col items-center justify-center gap-0.5 text-black font-bold text-[10.5px]';
+        } else {
+          btn.className = 'mob-nav-btn min-h-[54px] flex flex-col items-center justify-center gap-0.5 text-slate-500 font-medium text-[10.5px]';
+        }
+      });
+    }
+
+    function setLanguage(langCode) {
+      currentLang = langCode;
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        if (btn.getAttribute('data-lang') === langCode) {
+          btn.className = 'lang-btn px-2.5 py-1 rounded-lg bg-black text-white text-[11px] font-bold transition-all';
+        } else {
+          btn.className = 'lang-btn px-2.5 py-1 rounded-lg text-slate-600 hover:text-black text-[11px] font-bold transition-all';
+        }
+      });
+
+      const selectEl = document.getElementById('inputPatientLang');
+      if (selectEl) selectEl.value = langCode;
+
+      const progBox = document.getElementById('progAiResponse');
+      if (progBox) progBox.innerText = clinicalKnowledge[currentLang].progression;
+    }
+
+    function runDashboardPrompt(presetText) {
+      const input = document.getElementById('promptInput');
+      const query = (presetText || input.value || '').trim();
+      if (!query) return;
+
+      const q = query.toLowerCase();
+      let reply = clinicalKnowledge[currentLang].staging;
+      if (q.includes('precaution') || q.includes('biopsy')) {
+        reply = clinicalKnowledge[currentLang].precautions;
+      } else if (q.includes('day') || q.includes('growth') || q.includes('compare')) {
+        reply = clinicalKnowledge[currentLang].progression;
+      }
+
+      const card = document.getElementById('dashboardAiCard');
+      const textEl = document.getElementById('dashboardAiText');
+      textEl.innerText = reply;
+      card.classList.remove('hidden');
+      if (!presetText) input.value = '';
+    }
+
+    function triggerVoiceConsultationCard() {
+      runDashboardPrompt('Explain my High Risk 92% melanoma staging');
+      speakText(document.getElementById('dashboardAiText').innerText);
+    }
+
+    function askProgressionQuestion(preset) {
+      const input = document.getElementById('progCustomInput');
+      const query = (preset || input.value || '').trim().toLowerCase();
+      const out = document.getElementById('progAiResponse');
+
+      if (query.includes('dangerous')) {
+        out.innerText = clinicalKnowledge[currentLang].staging;
+      } else if (query.includes('notch') || query.includes('color')) {
+        out.innerText = `${clinicalKnowledge[currentLang].progression} Peripheral notch expansion indicates asymmetric radial growth.`;
+      } else {
+        out.innerText = clinicalKnowledge[currentLang].progression;
+      }
+      if (!preset && input) input.value = '';
+    }
+
+    function speakText(text) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = currentLang === 'TA' ? 'ta-IN' : 'en-IN';
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function stopSpeech() {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    }
+
+    function startVoiceRecognition(inputId) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const input = document.getElementById(inputId);
+      if (!SpeechRecognition) {
+        input.value = 'Explain my High Risk 92% melanoma staging';
+        runDashboardPrompt();
+        return;
+      }
+      const recognition = new SpeechRecognition();
+      recognition.lang = currentLang === 'TA' ? 'ta-IN' : 'en-IN';
+      recognition.onresult = (event) => {
+        input.value = event.results[0][0].transcript;
+        runDashboardPrompt();
+      };
+      recognition.start();
+    }
+
+    async function toggleLiveCamera() {
+      const video = document.getElementById('webcamVideo');
+      const svg = document.getElementById('defaultLesionSvg');
+      const img = document.getElementById('uploadedImagePreview');
+      const btn = document.getElementById('cameraToggleBtn');
+
+      if (liveStream) {
+        liveStream.getTracks().forEach(t => t.stop());
+        liveStream = null;
+        video.classList.add('hidden');
+        svg.classList.remove('hidden');
+        btn.innerText = 'Start Live Camera';
+        document.getElementById('scanSourceLabel').innerText = 'Waiting for image';
+        return;
+      }
+
+      try {
+        liveStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = liveStream;
+        video.classList.remove('hidden');
+        svg.classList.add('hidden');
+        img.classList.add('hidden');
+        btn.innerText = 'Stop Live Camera';
+        document.getElementById('scanSourceLabel').innerText = 'Live WebRTC Dermoscopy Stream';
+      } catch {
+        document.getElementById('scanSourceLabel').innerText = 'Camera Permission Denied · Using Sample';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded',()=>{
+      document.querySelectorAll('.tracking-card').forEach(card=>{
+        function select(){document.querySelectorAll('.tracking-card').forEach(other=>other.setAttribute('aria-pressed',String(other===card)));}
+        card.addEventListener('click',select);card.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});
+      });
+    });
+    let selectedScanUrl = null;
+    let trackingUrls = [];
+    function handleImageUpload(event) {
+      const file=event.target.files?.[0];if(!file)return;
+      if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){document.getElementById('scanSourceLabel').textContent='Choose JPEG, PNG or WebP, up to 5 MB';event.target.value='';return;}
+      const url=URL.createObjectURL(file);
+      const img=document.getElementById('uploadedImagePreview');
+      img.onload=()=>{
+        if(selectedScanUrl&&!trackingUrls.includes(selectedScanUrl))URL.revokeObjectURL(selectedScanUrl);
+        selectedScanUrl=url;
+        img.classList.remove('hidden');document.getElementById('defaultLesionSvg').classList.add('hidden');
+        document.getElementById('webcamVideo').classList.add('hidden');
+        document.getElementById('scanSourceLabel').textContent=file.name;
+        document.getElementById('scanFindingNote').textContent='Photo uploaded. No automated findings are available.';
+        trackingUrls.push(url);if(trackingUrls.length>3)URL.revokeObjectURL(trackingUrls.shift());
+        const historyPreview=document.getElementById('historyScanPreview');
+        historyPreview.replaceChildren();const historyPhoto=document.createElement('img');historyPhoto.src=url;historyPhoto.alt='Latest uploaded scan';historyPhoto.className='w-full h-full object-contain';historyPreview.append(historyPhoto);
+        document.querySelectorAll('.tracking-image').forEach((slot,index)=>{
+          slot.replaceChildren();const source=trackingUrls[index];
+          if(source){const photo=document.createElement('img');photo.src=source;photo.alt='Uploaded tracking photo '+(index+1);photo.className='w-full h-full object-contain';slot.append(photo);}else{slot.textContent='Waiting for image';}
+        });
+      };
+      img.onerror=()=>{URL.revokeObjectURL(url);document.getElementById('scanSourceLabel').textContent='Could not open this image';};img.src=url;
+    }
+    window.addEventListener('pagehide',()=>{new Set([...trackingUrls,selectedScanUrl]).forEach(url=>{if(url)URL.revokeObjectURL(url);});});
+
+    function saveScanToHistory() {
+      const list = document.getElementById('scanHistoryList');
+      const desc = document.getElementById('patientSymptomInput').value.trim();
+      const item = document.createElement('div');
+      item.className = 'history-item flex items-start gap-2.5 cursor-pointer group';
+      item.onclick = () => switchTab('reports');
+      item.innerHTML = `
+        <input type="checkbox" checked class="custom-check mt-0.5 flex-shrink-0" />
+        <div class="flex-1 min-w-0">
+          <h4 class="text-[13px] font-bold text-black truncate leading-tight">New Optical Scan</h4>
+          <p class="text-[11px] text-rose-600 font-semibold truncate mb-1">${desc.slice(0, 38)}...</p>
+          <span class="text-[11px] text-[#94a3b8] font-medium">Just now</span>
+        </div>
+      `;
+      list.prepend(item);
+      switchTab('progression');
+    }
+
+    const clinicRoutes = [
+      {
+        label: 'Nearby care search',
+        points: '160,185 260,155 360,115 460,90'
+      },
+      {
+        label: 'Active Route: KMC Melanoma & Laser Care Unit · 5.1 km · Open Now',
+        points: '160,185 320,180 470,172 610,165'
+      }
+    ];
+
+    function highlightClinic(idx) {
+      const names=['Apollo Hospital Greams Road Chennai','Kilpauk Medical College Chennai'];
+      document.querySelectorAll('[id^="clinicItem"]').forEach((card,index)=>{card.classList.toggle('clinic-selected',index===idx);});
+      const frame=document.querySelector('iframe[title="Google Maps dermatologist search"]');
+      if(frame)frame.src='https://www.google.com/maps?q='+encodeURIComponent(names[idx])+'&z=14&output=embed';
+    }
+
+    function zoomMap(factor) {
+      currentZoom = Math.min(Math.max(currentZoom * factor, 0.85), 1.5);
+      document.getElementById('InteractiveMapSvg').style.transform = `scale(${currentZoom})`;
+    }
+
+    function toggleSatellite() {
+      isSatellite = !isSatellite;
+      document.getElementById('mapCanvasBg').setAttribute('fill', isSatellite ? '#dbeafe' : '#f1f4f9');
+      document.getElementById('satBtn').innerText = isSatellite ? 'Standard Map' : 'Satellite';
+    }
+
+    let profileImageData = '';
+    function applyPatientDetails(data) {
+      const name = data.inputPatientName || 'Your profile';
+      const city = data.inputPatientCity || '';
+      ['headerPatientName','sidebarPatientName','reportPatientName'].forEach(id=>{ const el=document.getElementById(id); if(el)el.textContent=name; });
+      document.getElementById('sidebarPatientLocation').textContent=city;
+      document.getElementById('welcomePatientName').textContent=name.trim().split(/\s+/)[0];
+      if(data.avatar){profileImageData=data.avatar;['sidebarAvatar','profileAvatarPreview'].forEach(id=>{document.getElementById(id).src=data.avatar;});document.querySelectorAll('#scanHistoryList img[alt="Patient"]').forEach(img=>{img.src=data.avatar;});}
+    }
+    function savePatientDetails() {
+      const data={avatar:profileImageData};
+      ['Name','Email','Phone','City','Lang','Street','Notes'].forEach(key=>{const id='inputPatient'+key;data[id]=document.getElementById(id).value.trim();});
+      try {localStorage.setItem('dermaguard-preview-profile',JSON.stringify(data));applyPatientDetails(data);const toast=document.getElementById('profileSavedToast');toast.textContent='Changes saved on this browser';toast.classList.remove('hidden');setTimeout(()=>toast.classList.add('hidden'),2500);}catch{document.getElementById('profilePhotoError').textContent='Could not save. Try a smaller photo.';}
+    }
+    document.addEventListener('DOMContentLoaded',()=>{
+      try{const data=JSON.parse(localStorage.getItem('dermaguard-preview-profile')||'null');if(data){Object.keys(data).forEach(id=>{const el=document.getElementById(id);if(el&&'value' in el)el.value=data[id];});applyPatientDetails(data);}}catch{}
+      document.getElementById('profileAvatarInput').addEventListener('change',event=>{
+        const file=event.target.files[0];if(!file)return;
+        const error=document.getElementById('profilePhotoError');error.textContent='';
+        if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){error.textContent='Choose a JPEG, PNG or WebP under 5 MB.';return;}
+        const reader=new FileReader();reader.onload=()=>{const image=new Image();image.onload=()=>{const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;const side=Math.min(image.width,image.height);canvas.getContext('2d').drawImage(image,(image.width-side)/2,(image.height-side)/2,side,side,0,0,256,256);profileImageData=canvas.toDataURL('image/jpeg',0.85);document.getElementById('profileAvatarPreview').src=profileImageData;};image.onerror=()=>{error.textContent='This image could not be opened.';};image.src=reader.result;};reader.readAsDataURL(file);
+      });
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const promptInput = document.getElementById('promptInput');
+      promptInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') runDashboardPrompt();
+      });
+
+      const historySearch = document.getElementById('historySearchInput');
+      historySearch?.addEventListener('input', (e) => {
+        const val = e.target.value.toLowerCase();
+        document.querySelectorAll('.history-item').forEach(item => {
+          item.style.display = item.innerText.toLowerCase().includes(val) ? 'flex' : 'none';
+        });
+      });
+    });
+  </script>
+</body>
+</html>
