@@ -1,0 +1,100 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@layer base {
+  body {
+    @apply min-h-screen bg-[#f4f6fa] text-[#0a0f1d];
+    font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 9999px;
+  }
+}
+@layer components {
+  .field {
+    @apply mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-200;
+  }
+  .button {
+    @apply rounded-xl bg-black px-4 py-2 font-bold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2;
+  }
+  .action-card {
+    @apply border border-[#eef2f6] bg-white shadow-[0_4px_16px_rgba(15,23,42,0.03)] transition duration-200;
+  }
+  .action-card:hover {
+    @apply -translate-y-1 border-slate-200 shadow-[0_14px_28px_rgba(15,23,42,0.07)];
+  }
+  .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+}
+
+/* Reference studio shell: keeps the existing working pages, but gives them the supplied clinical workstation layout. */
+main > div {
+  max-width: 1400px;
+}
+@media (min-width: 1024px) {
+  main {
+    padding: 1.75rem !important;
+  }
+  main > div {
+    max-height: 92vh;
+    border-radius: 40px !important;
+    border-color: rgba(41, 63, 94, 0.42) !important;
+    box-shadow: 0 35px 80px -20px rgba(15, 23, 42, 0.12) !important;
+  }
+  main > div > aside:first-child {
+    width: 260px;
+    border-color: #eaeff5;
+  }
+}
+
+.auth-page { min-height:100dvh; display:grid; place-items:center; padding:32px!important; }
+.auth-shell { display:grid; grid-template-columns:1fr 1fr; width:100%; max-width:1160px; border:1px solid #e2e8f0; border-radius:32px; overflow:hidden; background:white; box-shadow:0 24px 80px #18243a0a; }
+.auth-story { padding:48px; background:#faf7f8; display:flex; flex-direction:column; justify-content:space-between; gap:56px; }
+.auth-story h1 { font-size:44px; line-height:1.15; letter-spacing:-2px; font-weight:800; margin:20px 0; }
+.auth-story p { max-width:370px; line-height:1.8; color:#64748b; }
+.auth-art { margin:32px auto; height:160px; width:160px; display:grid; place-items:center; border-radius:50%; background:radial-gradient(circle,#e7acc6,#f8edf2 65%); font-size:100px; color:#af5b7a; }
+.auth-form { width:100%; max-width:480px; margin:auto; padding:48px; }
+.auth-form .field { min-height:48px; }
+.auth-tabs { display:grid; grid-template-columns:1fr 1fr; padding:4px; gap:4px; background:#f1f5f9; border-radius:12px; margin:28px 0 24px; }
+.auth-tabs button { padding:10px; border-radius:9px; font-size:14px; font-weight:700; }
+.auth-tabs button[aria-pressed=true] { background:white; box-shadow:0 2px 6px #0001; }
+.auth-google { width:100%; min-height:48px; border:1px solid #cbd5e1; border-radius:12px; display:flex; justify-content:center; align-items:center; gap:12px; font-size:14px; font-weight:600; }
+.auth-divider { display:flex; align-items:center; gap:16px; margin:24px 0; color:#64748b; font-size:12px; }
+.auth-divider:before,.auth-divider:after { content:''; flex:1; height:1px; background:#e2e8f0; }
+@media(max-width:767px){.auth-page{padding:16px!important}.auth-shell{grid-template-columns:1fr}.auth-story{display:none}.auth-form{padding:32px 24px}}
+
+/* Lavender reference login */
+.auth-page{background:radial-gradient(ellipse at center,#faf7ff,#eee7fc);padding:32px!important;min-height:100dvh}
+.auth-shell{max-width:1420px;grid-template-columns:53% 47%;border:1px solid white;border-radius:54px;background:#faf7ff;box-shadow:0 20px 50px #7052a322;min-height:850px;overflow:hidden}
+
+.auth-form{background:#ffffffb8;max-width:none;width:calc(100% - 32px);margin:32px 32px 32px 0;padding:48px 54px;border:1px solid white;border-radius:48px;box-shadow:0 18px 40px #7654ad12;color:#1d1c3c}
+.auth-form h2{text-align:center;font-size:40px;margin:12px 0 10px}
+.auth-form h2+p{text-align:center;color:#6c37be;font-size:21px;margin-bottom:36px}
+.auth-form .field{border:1.5px solid #dcd2ee;border-radius:20px;background:#faf7ff;min-height:56px;padding:14px 20px;box-shadow:none;font-size:16px;color:#30274c}
+.auth-form .field::placeholder{color:#8c7cab}
+.auth-form form>button[type=button]{display:block;margin-left:auto;color:#6c24c8}
+.auth-form .button{background:linear-gradient(160deg,#b078de,#7134c4);border-radius:22px;min-height:58px;font-size:18px;box-shadow:inset 0 1px 2px #fff8;margin-top:26px}
+.auth-google{background:#ffffff99;border:1.5px solid #e1d7ef;border-radius:22px;min-height:54px;color:#201c3f;font-size:16px}
+.google-g{color:#4285f4;font-size:25px;font-weight:800}.auth-divider{margin:24px 0;color:#55456e}.auth-switch{text-align:center;margin-top:32px;font-size:16px}.auth-switch button{color:#7229c7;font-weight:700}
+.auth-form>a{font-size:11px;color:#8b7b9e;margin-top:18px}
+@media(max-width:900px){.auth-shell{grid-template-columns:1fr;min-height:0;max-width:600px;border-radius:32px}.auth-form{width:auto;margin:16px;padding:32px 24px;border-radius:26px}.auth-form h2{font-size:32px}.auth-page{padding:16px!important}}
+/* Text-only login panel keeps the lavender design without cropped artwork. */
+.auth-story { background:linear-gradient(145deg,#f4eaff,#ede4f9); color:#352353; }
+.auth-story h1 { color:#352353; }
+.auth-shell { min-height:720px; }
+.auth-form { align-self:center; }
+.auth-story.login-art-panel { display:flex; padding:0; gap:0; background:#f6efff; overflow:hidden; justify-content:center; }
+.login-artwork { display:block; width:100%; height:100%; max-height:900px; object-fit:contain; }
+@media(max-width:900px){.auth-story.login-art-panel{display:none}}
