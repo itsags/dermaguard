@@ -11,6 +11,25 @@ async function boot(data,onRequest=()=>{}){
  return dom;
 }
 const base={profile:{display_name:'Test Person',city:'',email:'test@example.com'},cases:[],scans:[]};
+it('refreshes nearby care when the saved city changes and ignores a stale response',async()=>{
+ const requests=[];
+ const dom=await boot({...base,profile:{...base.profile,city:'Chennai'}},message=>{
+  if(message.action==='clinics')requests.push(message);
+ });
+ const win=dom.window,doc=win.document;
+ win.switchTab('clinics');
+ win.apply({...base,profile:{...base.profile,city:'Madurai'}});
+ expect(requests.map(request=>request.payload.city)).toEqual(['Chennai','Madurai']);
+ for (const request of requests.slice().reverse()) {
+  win.dispatchEvent(new win.MessageEvent('message',{origin:'http://localhost',source:win.parent,data:{
+   rpcResult:true,id:request.id,result:{items:[{name:request.payload.city+' clinic',destination:'1,2'}]},
+  }}));
+  await Promise.resolve();
+ }
+ expect(doc.querySelector('#clinicList').textContent).toContain('Madurai clinic');
+ expect(doc.querySelector('#clinicList').textContent).not.toContain('Chennai clinic');
+ win.close();
+});
 it('shows the newly saved observation in Scan Studio and opens its report',async()=>{
  let request;
  const dom=await boot(base,message=>{if(message.action==='scan')request=message;});

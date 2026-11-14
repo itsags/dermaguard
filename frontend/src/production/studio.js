@@ -52,14 +52,18 @@ function speakText(text){
  if(lang==='TA'&&!voice){status('A Tamil voice is not installed on this device. The Tamil text reply is available.');return;}
  utterance.lang=lang==='TA'?'ta-IN':lang==='TG'?'en-IN':'en-US';if(voice)utterance.voice=voice;speechSynthesis.speak(utterance);
 }
-function consent(){return $('chatConsent').checked;}
+function consent(target){return $(target==='progAiResponse'?'trackingConsent':'chatConsent').checked;}
 async function ask(message,target){
  if(!message.trim())return;
  lastQuestions.set(target,message);const requestId=makeId(),requestLanguage=lang;chatRequests.set(target,requestId);
  const output=$(target);if(state.capabilities?.chat===false){output.textContent='AI chat is not connected yet.';return;}output.scrollIntoView?.({block:'nearest',behavior:'smooth'});
  const waiting={EN:'Thinking…',TA:'பதில் தயாராகிறது…',TG:'Bathil thayaar aagudhu…'};output.textContent=waiting[requestLanguage];
  try{
-  const response=await rpc('chat',{message,language:requestLanguage,case_id:selectedCase||null,consent:consent()});
+  const response=await rpc('chat',{
+   message, language:requestLanguage,
+   case_id:target==='progAiResponse' ? selectedCase||null : null,
+   consent:consent(target),
+  });
   if(chatRequests.get(target)!==requestId||lang!==requestLanguage)return;
   output.lang=requestLanguage==='TA'?'ta':requestLanguage==='TG'?'ta-Latn':'en';
   output.textContent=(response.mode==='local-records'?({EN:'Local record guide: ',TA:'உள்ளூர் பதிவு வழிகாட்டி: ',TG:'Local record guide: '}[requestLanguage]):'')+response.answer;
@@ -71,9 +75,18 @@ function startVoiceInput(){status('Type your question or use your device’s key
 function startVoiceConsultation(){runDashboardPrompt();}
 function triggerVoiceConsultationCard(){document.getElementById('chatComposer').scrollIntoView({block:'center',behavior:'smooth'});$('promptInput').focus();}
 function startVoiceRecognition(){startVoiceInput();}
-function selectCase(id){selectedCase=id;renderTracking();renderReports();}
+function selectCase(id){
+ selectedCase=id;
+ if ($('trackingCase')) $('trackingCase').value=id;
+ if ($('caseSelect')) $('caseSelect').value=id;
+ lastQuestions.delete('progAiResponse');
+ chatRequests.delete('progAiResponse');
+ if ($('progAiResponse')) $('progAiResponse').textContent='Ask about the dates and notes in this observation.';
+ renderTracking();
+ renderReports();
+}
 function photo(image,cls='w-full h-full object-contain'){const img=node('img',undefined,cls);img.src=image.url;img.alt='Private skin observation';return img;}
-function allPhotos(){return state.scans.filter(row=>!selectedCase||row.case_id===selectedCase).flatMap(row=>row.images.map(image=>({...image,notes:row.notes,report:row.report}))).sort((a,b)=>new Date(a.captured_at)-new Date(b.captured_at)).slice(-3);}
+function allPhotos(){return state.scans.filter(row=>row.case_id===selectedCase).flatMap(row=>row.images.map(image=>({...image,notes:row.notes,report:row.report}))).sort((a,b)=>new Date(a.captured_at)-new Date(b.captured_at)).slice(-3);}
 function renderTracking(){const images=allPhotos();document.querySelectorAll('.tracking-image').forEach((slot,index)=>{slot.replaceChildren();if(images[index])slot.append(photo(images[index]));else slot.textContent='Waiting for image';const card=slot.closest('.tracking-card');if(card){const label=Array.from(card.children).find(el=>el!==slot&&['Waiting for image','Photo saved'].includes(el.textContent.trim()));if(label)label.textContent=images[index]?'Photo saved':'Waiting for image';card.querySelector('[data-date]')?.remove();const date=node('p',images[index]?new Date(images[index].captured_at).toLocaleString():'No photo saved','text-xs text-slate-500');date.dataset.date='true';card.append(date);}});const elapsed=$('elapsedTime');if(elapsed)elapsed.textContent=images.length>1?Math.round((new Date(images.at(-1).captured_at)-new Date(images[0].captured_at))/86400000)+' days between first and latest photo':'Add dated photos of the same area to compare.';}
 let savedResultId;
 
@@ -104,7 +117,8 @@ function reportDetails(items, columns = 'sm:grid-cols-2') {
 function photoCheckDetails(row) {
  return (row.report?.photo_checks || []).map((check, index) => [
   'Photo ' + (index + 1) + ' · file verified',
-  check.format + ' · ' + check.width_px + ' × ' + check.height_px + ' px · ' + (check.bytes / 1024).toFixed(1) + ' KB',
+  check.format + ' · ' + check.width_px + ' × ' + check.height_px + ' px · ' + (check.bytes / 1024).toFixed(1) + ' KB' +
+  (check.very_dark_pct == null ? '' : ' · Very dark pixels: ' + check.very_dark_pct + '% · Very bright pixels: ' + check.very_bright_pct + '%'),
  ]);
 }
 
@@ -122,15 +136,17 @@ function observationBody(row) {
  summary.append(node('p', 'Observation result', 'text-xs uppercase font-bold text-slate-600'),
   node('h3', 'Clinical analysis unavailable', 'text-lg font-bold'),
   node('p', 'The checks below describe the uploaded files. Lesion diameter and change are unavailable from these photos.', 'text-sm text-slate-600'));
- const notes = node('div', undefined, 'rounded-xl border border-slate-200 p-3 space-y-1');
- notes.append(node('h4', 'Your observations', 'font-semibold text-sm'),
-  node('p', row.notes || 'No notes added', 'text-sm whitespace-pre-wrap break-words'));
  const checks = photoCheckDetails(row);
  details.append(summary);
  if (checks.length) details.append(reportDetails(checks));
  const measurements = measurementDetails(row);
  if (measurements.length) details.append(reportDetails(measurements));
- details.append(notes);
+ if (row.notes?.trim()) {
+  const notes = node('div', undefined, 'rounded-xl border border-slate-200 p-3 space-y-1');
+  notes.append(node('h4', 'Your observations', 'font-semibold text-sm'),
+   node('p', row.notes, 'text-sm whitespace-pre-wrap break-words'));
+  details.append(notes);
+ }
  layout.append(gallery, details);
  return layout;
 }
@@ -244,7 +260,7 @@ function printReport(row) {
   .then(() => { win.focus(); win.print(); });
 }
 function renderHistory(){const history=$('scanHistoryList');history.replaceChildren();if(!state.scans.length)history.append(node('p','No saved scans yet.','text-sm text-slate-500'));state.scans.forEach(row=>{const button=node('button',undefined,'w-full text-left rounded-xl border border-slate-200 p-3 space-y-2');button.append(node('strong',new Date(row.created_at).toLocaleDateString()),photo(row.images[0],'w-full h-24 object-contain rounded-lg'),node('p',row.notes||'Skin observation','text-xs'));button.onclick=()=>{selectCase(row.case_id);switchTab('reports');renderReports();};history.append(button);});}
-function apply(data){state=data;const p=state.profile;const localMode=state.capabilities?.chat_mode==='local-records';if($('chatConsent'))$('chatConsent').parentElement.hidden=localMode;if($('trackingConsent'))$('trackingConsent').parentElement.hidden=localMode;if(localMode&&!lastQuestions.has('dashboardAiText')&&$('dashboardAiText'))$('dashboardAiText').textContent='Local record guide is ready. Ask about scans, saved dates, reports, nearby care or your profile. Generative AI is not connected yet.';setLanguage(p.language||'EN',false);selectedCase=selectedCase||state.cases[0]?.id||'';const values={Name:p.display_name,Email:p.email,Phone:p.phone,City:p.city,Street:p.street,Notes:p.notes,Lang:lang};Object.entries(values).forEach(([key,value])=>{const el=$('inputPatient'+key);if(el){el.value=value||'';if(key==='Email')el.readOnly=true;}});['sidebarPatientName','reportPatientName'].forEach(id=>{if($(id))$(id).textContent=p.display_name||'Your profile';});$('welcomePatientName').textContent=p.display_name?.trim().split(/\s+/)[0]||'there';$('sidebarPatientLocation').textContent=p.city||'Add your location';document.querySelectorAll('img[alt="Patient"],#sidebarAvatar,#profileAvatarPreview').forEach(img=>{img.src=p.avatar||'/images/dermaguard-logo.svg';});const select=$('caseSelect');select.replaceChildren(new Option('New skin observation',''),...state.cases.map(c=>new Option(c.title,c.id)));select.value=selectedCase;renderHistory();renderTracking();renderReports();renderScanResult();}
+function apply(data){state=data;const p=state.profile;const localMode=state.capabilities?.chat_mode==='local-records';if($('chatConsent'))$('chatConsent').parentElement.hidden=localMode;if($('trackingConsent'))$('trackingConsent').parentElement.hidden=localMode;if(localMode&&!lastQuestions.has('dashboardAiText')&&$('dashboardAiText'))$('dashboardAiText').textContent='Local record guide is ready. Ask about scans, saved dates, reports, nearby care or your profile. Generative AI is not connected yet.';setLanguage(p.language||'EN',false);selectedCase=selectedCase||state.cases[0]?.id||'';const values={Name:p.display_name,Email:p.email,Phone:p.phone,City:p.city,Street:p.street,Notes:p.notes,Lang:lang};Object.entries(values).forEach(([key,value])=>{const el=$('inputPatient'+key);if(el){el.value=value||'';if(key==='Email')el.readOnly=true;}});['sidebarPatientName','reportPatientName'].forEach(id=>{if($(id))$(id).textContent=p.display_name||'Your profile';});$('welcomePatientName').textContent=p.display_name?.trim().split(/\s+/)[0]||'there';$('sidebarPatientLocation').textContent=p.city||'Add your location';document.querySelectorAll('img[alt="Patient"],#sidebarAvatar,#profileAvatarPreview').forEach(img=>{img.src=p.avatar||'/images/dermaguard-logo.svg';});const select=$('caseSelect');select.replaceChildren(new Option('New skin observation',''),...state.cases.map(c=>new Option(c.title,c.id)));select.value=selectedCase;renderHistory();renderTracking();renderReports();renderScanResult();const tracking=$('trackingCase');if(tracking){tracking.replaceChildren(new Option('Choose an observation',''),...state.cases.map(item=>new Option(item.title,item.id)));tracking.value=selectedCase;}if(!$('view-clinics').classList.contains('hidden'))void loadClinics();}
 let profileSaving=false;async function savePatientDetails(){if(profileSaving)return;profileSaving=true;try{status('Saving profile…');const input=id=>$(id).value.trim();const data=await rpc('profile',{name:input('inputPatientName'),city:input('inputPatientCity'),phone:input('inputPatientPhone'),street:input('inputPatientStreet'),notes:input('inputPatientNotes'),language:input('inputPatientLang'),avatar_path:state.profile.avatar_path,file:$('profileAvatarInput').files[0]});apply(data);profileDirty=false;$('profileAvatarInput').value='';status('Profile saved.');}catch(error){status(error.message);}finally{profileSaving=false;}}
 let photoCheckRevision = 0;
 function clearPhotoSelection(message = 'Choose photos to preview and check them.') {
@@ -265,10 +281,38 @@ function clearPhotoSelection(message = 'Choose photos to preview and check them.
  $('saveScan').disabled = true;
 }
 
-function readPhotoDimensions(url) {
+function inspectPhoto(url) {
  return new Promise((resolve, reject) => {
   const image = new Image();
-  image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+  image.onload = () => {
+   const width = image.naturalWidth, height = image.naturalHeight;
+   const result = {width, height};
+   if (width >= 128 && height >= 128 && width * height <= 25_000_000) {
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(width * 64 / Math.max(width, height)));
+    canvas.height = Math.max(1, Math.round(height * 64 / Math.max(width, height)));
+    try {
+     const context = image instanceof HTMLImageElement && canvas.getContext('2d', {willReadFrequently: true});
+     if (context) {
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let dark = 0, bright = 0, count = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+       if (pixels[index + 3] < 128) continue;
+       const level = 0.2126 * pixels[index] + 0.7152 * pixels[index + 1] + 0.0722 * pixels[index + 2];
+       dark += Number(level < 24);
+       bright += Number(level > 240);
+       count++;
+      }
+      if (count) {
+       result.dark = Math.round(100 * dark / count);
+       result.bright = Math.round(100 * bright / count);
+      }
+     }
+    } catch { /* The decoded dimensions are still available. */ }
+   }
+   resolve(result);
+  };
   image.onerror = () => reject(new Error('Could not open this image.'));
   image.src = url;
  });
@@ -287,7 +331,7 @@ async function handleImageUpload(event) {
    throw new Error('Choose JPEG, PNG or WebP files up to 5 MB per photo.');
   }
   urls = picked.map(file => URL.createObjectURL(file));
-  const dimensions = await Promise.all(urls.map(readPhotoDimensions));
+  const dimensions = await Promise.all(urls.map(inspectPhoto));
   if (revision !== photoCheckRevision) return;
   const invalid = dimensions.findIndex(({ width, height }) => width < 128 || height < 128 || width * height > 25_000_000);
   if (invalid !== -1) throw new Error('Photo ' + (invalid + 1) + ' must be at least 128 × 128 pixels and at most 25 megapixels.');
@@ -297,7 +341,10 @@ async function handleImageUpload(event) {
   preview.classList.remove('hidden');
   $('defaultLesionSvg').classList.add('hidden');
   $('scanSourceLabel').textContent = picked.length === 1 ? '1 photo ready' : picked.length + ' photos ready';
-  note.textContent = 'Photo check passed. ' + dimensions.map(({ width, height }) => width + ' × ' + height + ' px').join(', ') + '.';
+  note.textContent = 'Photo check passed. ' + dimensions.map(({width, height, dark, bright}, index) =>
+   'Photo ' + (index + 1) + ': ' + width + ' × ' + height + ' px' +
+   (dark == null ? '' : ' · very dark pixels ' + dark + '% · very bright pixels ' + bright + '%'),
+  ).join('; ') + '.';
   const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   picked.forEach((file, index) => {
    const label = node('label', file.name + ' — photo taken on', 'block text-xs font-semibold');
@@ -359,16 +406,27 @@ async function saveScanToHistory() {
   $('chooseScanPhotos').disabled = false;
  }
 }
-let loadedCity='',clinicLoading=false;
+let loadedCity='', pendingCity=null, clinicRequest=0;
 async function loadClinics(){
- const city=state.profile.city;const list=$('clinicList');
- if(clinicLoading||loadedCity===city&&list.children.length)return;
- if(!city){list.replaceChildren(node('p','Add your city in Patient Details to find nearby care.'));return;}
- clinicLoading=true;loadedCity=city;
+ const city=(state.profile.city||'').trim();
+ const list=$('clinicList');
+ if (pendingCity===city || (city && loadedCity===city)) return;
+ const request=++clinicRequest;
+ if(!city){
+  loadedCity='';
+  pendingCity=null;
+  $('careMap').removeAttribute('src');
+  $('careFallback').hidden=true;
+  list.replaceChildren(node('p','Add your city in Patient Details to find nearby care.'));
+  return;
+ }
+ pendingCity=city;
+ $('careFallback').hidden=false;
  const query='dermatologist near '+city;$('careMap').src='https://www.google.com/maps?q='+encodeURIComponent(query)+'&output=embed';$('careFallback').href='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(query);
  list.replaceChildren(node('p','Finding nearby providers…','text-sm'));
  try{
-  const response=await rpc('clinics',{city});if(state.profile.city!==city){loadedCity='';return;}
+  const response=await rpc('clinics',{city});if(request!==clinicRequest)return;
+  loadedCity=city;
   list.replaceChildren();response.items.forEach(row=>{
    const card=node('article',undefined,'action-card rounded-2xl p-5');
    card.append(node('h3',row.name,'font-bold'),node('p',row.address||city,'text-sm text-slate-500'),node('p',row.specialty?'Dermatology':'Hospital — confirm dermatology availability','text-xs text-slate-500'));
@@ -376,9 +434,18 @@ async function loadClinics(){
    const direction=node('a','Directions','button text-sm');direction.href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(row.destination);[contact,direction].forEach(link=>{link.target='_blank';link.rel='noopener noreferrer';});actions.append(contact,direction);card.append(actions);
    card.onclick=()=>{list.querySelectorAll('article').forEach(other=>other.style.outline=other===card?'2px solid black':'none');};list.append(card);
   });
-  if(response.source)list.append(node('p','Provider data: '+response.source,'text-xs text-slate-500'));if(!response.items.length){loadedCity='';list.append(node('p','No provider listings were returned for this location. Use Google Maps below.','text-sm'));}
- }catch(error){loadedCity='';list.replaceChildren(node('p',error.message+' Google Maps is still available.','text-sm text-slate-500'));}
- finally{clinicLoading=false;const retry=node('button','Refresh nearby list','button mt-3');retry.onclick=()=>{loadedCity='';void loadClinics();};list.append(retry);}
+  if(response.source)list.append(node('p','Provider data: '+response.source,'text-xs text-slate-500'));if(!response.items.length){list.append(node('p','No provider listings were returned for this location. Use Google Maps below.','text-sm'));}
+ }catch(error){if(request!==clinicRequest)return;loadedCity='';list.replaceChildren(node('p',error.message+' Google Maps is still available.','text-sm text-slate-500'));}
+ finally{
+  if(request===clinicRequest){
+   pendingCity=null;
+   if(!loadedCity){
+    const retry=node('button','Try again','button mt-3');
+    retry.onclick=()=>void loadClinics();
+    list.append(retry);
+   }
+  }
+ }
 }
 document.addEventListener('DOMContentLoaded',async()=>{
  installRefresh();
@@ -449,14 +516,29 @@ document.addEventListener('DOMContentLoaded',async()=>{
  scanResult.hidden = true;
  panel.after(scanResult);
  const progression=$('view-progression');const metric=Array.from(progression.children).find(el=>el.textContent.includes('Diameter Expansion'));if(metric)metric.replaceChildren(node('p','Measurements and image-based comparisons are unavailable until a validated model is connected.','text-sm text-slate-500'));$('progAiResponse').textContent='Ask about the dates and notes in your selected case.';const elapsed=node('p',undefined,'text-sm');elapsed.id='elapsedTime';progression.prepend(elapsed);
+ const trackingCase=node('select',undefined,'field');
+ trackingCase.id='trackingCase';
+ trackingCase.setAttribute('aria-label','Select observation to track');
+ trackingCase.onchange=()=>selectCase(trackingCase.value);
+ elapsed.after(trackingCase);
+ const progressInput=$('progCustomInput');
+ progressInput.placeholder='Ask about saved dates and notes…';
+ progressInput.onkeydown=event=>{if(event.key==='Enter')askProgressionQuestion();};
+ const progressButtons=progression.querySelectorAll('button[onclick^="askProgressionQuestion("]');
+ const progressQuestions=['Compare my first and latest notes','How far apart are these photos?','Summarize my observations'];
+ progressButtons.forEach((button,index)=>{
+  button.removeAttribute('onclick');
+  if(index<progressQuestions.length)button.textContent=progressQuestions[index];
+  button.onclick=()=>askProgressionQuestion(progressQuestions[index]);
+ });
  document.querySelectorAll('.tracking-card').forEach(card=>{card.onclick=()=>document.querySelectorAll('.tracking-card').forEach(c=>c.setAttribute('aria-pressed',String(c===card)));});
- const trackingConsent=node('label',' Allow selected-case notes to be sent to the AI provider for replies.','block text-xs text-slate-600');const consentCopy=node('input');consentCopy.type='checkbox';consentCopy.id='trackingConsent';trackingConsent.prepend(consentCopy);$('progAiResponse').parentElement.before(trackingConsent);consentCopy.onchange=()=>{$('chatConsent').checked=consentCopy.checked;};
+ const trackingConsent=node('label',' Allow selected-case notes to be sent to the AI provider for replies.','block text-xs text-slate-600');const consentCopy=node('input');consentCopy.type='checkbox';consentCopy.id='trackingConsent';trackingConsent.prepend(consentCopy);$('progAiResponse').parentElement.before(trackingConsent);
  const reports=$('view-reports');reports.replaceChildren(node('h2','Health Reports','text-2xl font-bold'));const filter=node('input',undefined,'field');filter.type='date';filter.id='reportFrom';filter.setAttribute('aria-label','Reports from date');filter.onchange=renderReports;const toggle=node('input');toggle.type='checkbox';toggle.id='reportProgression';toggle.onchange=renderReports;const label=node('label','Include selected-case progression dates','text-sm');label.prepend(toggle);const reportList=node('div',undefined,'space-y-4');reportList.id='reportList';reports.append(filter,label,reportList);
  const clinics=$('view-clinics');clinics.replaceChildren(node('h2','Nearby dermatologists & hospitals','text-2xl font-bold'));const care=node('iframe',undefined,'w-full h-80 border-0 rounded-xl');care.title='Nearby dermatology map';care.id='careMap';care.loading='lazy';const fallback=node('a','Open in Google Maps','underline text-sm');fallback.id='careFallback';fallback.target='_blank';fallback.rel='noopener noreferrer';const clinicList=node('div',undefined,'grid md:grid-cols-2 gap-4');clinicList.id='clinicList';clinics.append(care,fallback,clinicList);
  $('dashboardAiCard')?.remove();
  const composer=$('promptInput').parentElement.parentElement;composer.id='chatComposer';
  const shortcuts=$('view-dashboard').querySelector(':scope > .grid');if(shortcuts)shortcuts.id='dashboardShortcuts';
- const chat=node('div',undefined,'space-y-3 mt-4');const consentLabel=node('label','Allow my question and selected-case notes to be sent to the AI provider for this reply. Photos are not sent.','text-xs text-slate-600');const consentInput=node('input');consentInput.type='checkbox';consentInput.id='chatConsent';consentLabel.prepend(consentInput);const output=node('p','Ask a question about your records or using DermaGuard.','text-sm leading-7');output.id='dashboardAiText';output.role='status';const listen=node('button','Listen to reply','button');listen.onclick=()=>speakText(output.textContent);chat.id='dashboardReply';chat.className='w-full max-w-[740px] mx-auto rounded-2xl border border-slate-200 bg-white p-4 space-y-3';chat.append(output,listen);consentInput.onchange=()=>{consentCopy.checked=consentInput.checked;};composer.before(chat);composer.append(consentLabel);
+ const chat=node('div',undefined,'space-y-3 mt-4');const consentLabel=node('label','Allow my question to be sent to the AI provider for this reply.','text-xs text-slate-600');const consentInput=node('input');consentInput.type='checkbox';consentInput.id='chatConsent';consentLabel.prepend(consentInput);const output=node('p','Ask a question about your records or using DermaGuard.','text-sm leading-7');output.id='dashboardAiText';output.role='status';const listen=node('button','Listen to reply','button');listen.onclick=()=>speakText(output.textContent);chat.id='dashboardReply';chat.className='w-full max-w-[740px] mx-auto rounded-2xl border border-slate-200 bg-white p-4 space-y-3';chat.append(output,listen);composer.before(chat);composer.append(consentLabel);
  const presets=Array.from(document.querySelectorAll('#view-dashboard button[onclick^="runDashboardPrompt("]'));const questions=['How do I keep a skin observation record?','What changes should I discuss with a dermatologist?','Compare the dates and notes in my case.'];presets.filter(b=>b.textContent.trim()).slice(0,3).forEach((button,i)=>{button.textContent=questions[i];button.onclick=()=>runDashboardPrompt(questions[i]);});$('promptInput').placeholder='Ask about skin records, tracking, reports or nearby care…';$('promptInput').onkeydown=e=>{if(e.key==='Enter')runDashboardPrompt();};
  document.querySelectorAll('button[onclick*="dermaguard:logout"]').forEach(button=>button.onclick=()=>rpc('logout').catch(e=>status(e.message)));
  $('profileAvatarInput').onchange=event=>{const file=event.target.files[0];if(file){const url=URL.createObjectURL(file);$('profileAvatarPreview').src=url;$('profileAvatarPreview').onload=()=>URL.revokeObjectURL(url);}};

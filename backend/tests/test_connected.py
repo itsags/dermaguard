@@ -68,7 +68,8 @@ def test_create_checks_photos_and_records_unavailable_model(login):
   validate.assert_awaited_once()
   assert db.call_args.kwargs['payload']['report']['model_status']=='unavailable'
   assert db.call_args.kwargs['payload']['report']['photo_checks'] == [
-   {'width_px': 240, 'height_px': 160, 'format': 'JPEG', 'bytes': len(content)}]
+   {'width_px': 240, 'height_px': 160, 'format': 'JPEG', 'bytes': len(content),
+    'very_dark_pct': 0, 'very_bright_pct': 0}]
 def test_pdf_valid_and_not_cached(login):
  row={'created_at':'2026-11-09','notes':'Observed change','images':[],'report':{'summary':'Recorded','notice':'Not a diagnosis'}}
  with patch('app.connected.database',new=AsyncMock(return_value=[row])):
