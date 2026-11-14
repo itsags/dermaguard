@@ -99,8 +99,77 @@ function printReport(row){const win=window.open('','_blank');if(!win){status('Al
 function renderHistory(){const history=$('scanHistoryList');history.replaceChildren();if(!state.scans.length)history.append(node('p','No saved scans yet.','text-sm text-slate-500'));state.scans.forEach(row=>{const button=node('button',undefined,'w-full text-left rounded-xl border border-slate-200 p-3 space-y-2');button.append(node('strong',new Date(row.created_at).toLocaleDateString()),photo(row.images[0],'w-full h-24 object-contain rounded-lg'),node('p',row.notes||'Skin observation','text-xs'));button.onclick=()=>{selectCase(row.case_id);switchTab('reports');renderReports();};history.append(button);});}
 function apply(data){state=data;const p=state.profile;const localMode=state.capabilities?.chat_mode==='local-records';if($('chatConsent'))$('chatConsent').parentElement.hidden=localMode;if($('trackingConsent'))$('trackingConsent').parentElement.hidden=localMode;if(localMode&&!lastQuestions.has('dashboardAiText')&&$('dashboardAiText'))$('dashboardAiText').textContent='Local record guide is ready. Ask about scans, saved dates, reports, nearby care or your profile. Generative AI is not connected yet.';setLanguage(p.language||'EN',false);selectedCase=selectedCase||state.cases[0]?.id||'';const values={Name:p.display_name,Email:p.email,Phone:p.phone,City:p.city,Street:p.street,Notes:p.notes,Lang:lang};Object.entries(values).forEach(([key,value])=>{const el=$('inputPatient'+key);if(el){el.value=value||'';if(key==='Email')el.readOnly=true;}});['sidebarPatientName','reportPatientName'].forEach(id=>{if($(id))$(id).textContent=p.display_name||'Your profile';});$('welcomePatientName').textContent=p.display_name?.trim().split(/\s+/)[0]||'there';$('sidebarPatientLocation').textContent=p.city||'Add your location';document.querySelectorAll('img[alt="Patient"],#sidebarAvatar,#profileAvatarPreview').forEach(img=>{img.src=p.avatar||'/images/dermaguard-logo.svg';});const select=$('caseSelect');select.replaceChildren(new Option('New skin observation',''),...state.cases.map(c=>new Option(c.title,c.id)));select.value=selectedCase;renderHistory();renderTracking();renderReports();}
 let profileSaving=false;async function savePatientDetails(){if(profileSaving)return;profileSaving=true;try{status('Saving profile…');const input=id=>$(id).value.trim();const data=await rpc('profile',{name:input('inputPatientName'),city:input('inputPatientCity'),phone:input('inputPatientPhone'),street:input('inputPatientStreet'),notes:input('inputPatientNotes'),language:input('inputPatientLang'),avatar_path:state.profile.avatar_path,file:$('profileAvatarInput').files[0]});apply(data);profileDirty=false;$('profileAvatarInput').value='';status('Profile saved.');}catch(error){status(error.message);}finally{profileSaving=false;}}
-function handleImageUpload(event){const picked=Array.from(event.target.files||[]);if(!picked.length||picked.length>3){status('Choose 1 to 3 photos.');return;}if(picked.some(f=>!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>5*1024*1024)){status('Use JPEG, PNG or WebP, up to 5 MB per photo.');return;}urls.forEach(URL.revokeObjectURL);files=picked;scanRequestId=makeId();urls=files.map(URL.createObjectURL);$('uploadedImagePreview').src=urls[0];$('uploadedImagePreview').classList.remove('hidden');$('defaultLesionSvg').classList.add('hidden');$('scanSourceLabel').textContent=files.length+' photo(s) selected';const dates=$('photoDates');dates.replaceChildren();files.forEach((file,index)=>{const label=node('label',file.name+' â€” photo taken on','block text-xs font-semibold');const date=node('input',undefined,'field');date.type='datetime-local';date.required=true;date.max=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);date.value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);date.dataset.photoDate=String(index);label.append(date);dates.append(label);});}
-async function saveScanToHistory(){if(saving)return;if(!files.length){status('Choose at least one skin photo.');return;}if(!$('skinConsent').checked){status('Confirm these photos show the skin area you want to record.');return;}const dates=Array.from(document.querySelectorAll('[data-photo-date]')).map(el=>new Date(el.value));if(dates.some(d=>!Number.isFinite(d.getTime())||d>Date.now())){status('Enter valid photo dates, not in the future.');return;}saving=true;$('saveScan').disabled=true;try{status('Saving private photos…');const data=await rpc('scan',{files,dates:dates.map(d=>d.toISOString()),case_id:$('caseSelect').value||null,title:$('caseTitle').value.trim(),notes:$('patientSymptomInput').value.trim(),request_id:scanRequestId});selectedCase=data.scans[0]?.case_id||selectedCase;apply(data);scanRequestId=makeId();files=[];urls.forEach(URL.revokeObjectURL);urls=[];$('scanFileInput').value='';$('uploadedImagePreview').classList.add('hidden');$('defaultLesionSvg').classList.remove('hidden');$('photoDates').replaceChildren();status('Saved. Clinical image analysis is not enabled.');switchTab('reports');}catch(error){status(error.message);}finally{saving=false;$('saveScan').disabled=false;}}
+let photoCheckRevision = 0;
+function clearPhotoSelection(message = 'Choose photos to preview and check them.') {
+ photoCheckRevision++;
+ urls.forEach(url => URL.revokeObjectURL(url));
+ urls = [];
+ files = [];
+ scanRequestId = makeId();
+ $('scanFileInput').value = '';
+ const preview = $('uploadedImagePreview');
+ preview.removeAttribute('src');
+ preview.classList.add('hidden');
+ $('defaultLesionSvg').classList.remove('hidden');
+ $('scanSourceLabel').textContent = 'Waiting for image';
+ $('scanFindingNote').textContent = message;
+ $('photoDates').replaceChildren();
+ $('skinConsent').checked = false;
+ $('saveScan').disabled = true;
+}
+
+function readPhotoDimensions(url) {
+ return new Promise((resolve, reject) => {
+  const image = new Image();
+  image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+  image.onerror = () => reject(new Error('Could not open this image.'));
+  image.src = url;
+ });
+}
+
+async function handleImageUpload(event) {
+ const picked = Array.from(event.target.files || []);
+ if (saving || !picked.length) return;
+ clearPhotoSelection();
+ const revision = photoCheckRevision;
+ const note = $('scanFindingNote');
+ note.textContent = 'Checking photos…';
+ try {
+  if (picked.length > 3) throw new Error('Choose up to 3 photos.');
+  if (picked.some(file => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || !file.size || file.size > 5 * 1024 * 1024)) {
+   throw new Error('Choose JPEG, PNG or WebP files up to 5 MB per photo.');
+  }
+  urls = picked.map(file => URL.createObjectURL(file));
+  const dimensions = await Promise.all(urls.map(readPhotoDimensions));
+  if (revision !== photoCheckRevision) return;
+  const invalid = dimensions.findIndex(({ width, height }) => width < 128 || height < 128 || width * height > 25_000_000);
+  if (invalid !== -1) throw new Error('Photo ' + (invalid + 1) + ' must be at least 128 × 128 pixels and at most 25 megapixels.');
+  files = picked;
+  const preview = $('uploadedImagePreview');
+  preview.src = urls[0];
+  preview.classList.remove('hidden');
+  $('defaultLesionSvg').classList.add('hidden');
+  $('scanSourceLabel').textContent = picked.length === 1 ? '1 photo ready' : picked.length + ' photos ready';
+  note.textContent = 'Photo check passed. ' + dimensions.map(({ width, height }) => width + ' × ' + height + ' px').join(', ') + '.';
+  const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  picked.forEach((file, index) => {
+   const label = node('label', file.name + ' — photo taken on', 'block text-xs font-semibold');
+   const date = node('input', undefined, 'field');
+   date.type = 'datetime-local';
+   date.required = true;
+   date.max = now;
+   date.value = now;
+   date.dataset.photoDate = String(index);
+   label.append(date);
+   $('photoDates').append(label);
+  });
+  $('saveScan').disabled = false;
+ } catch (error) {
+  if (revision !== photoCheckRevision) return;
+  clearPhotoSelection(error.message);
+ }
+}
+async function saveScanToHistory(){if(saving)return;if(!files.length){status('Choose at least one skin photo.');return;}if(!$('skinConsent').checked){status('Confirm these photos show the skin area you want to record.');return;}const dates=Array.from(document.querySelectorAll('[data-photo-date]')).map(el=>new Date(el.value));if(dates.some(d=>!Number.isFinite(d.getTime())||d>Date.now())){status('Enter valid photo dates, not in the future.');return;}saving=true;$('saveScan').disabled=true;$('chooseScanPhotos').disabled=true;try{status('Saving private photos…');const data=await rpc('scan',{files,dates:dates.map(d=>d.toISOString()),case_id:$('caseSelect').value||null,title:$('caseTitle').value.trim(),notes:$('patientSymptomInput').value.trim(),request_id:scanRequestId});selectedCase=data.scans[0]?.case_id||selectedCase;apply(data);clearPhotoSelection();status('Observation saved.');switchTab('reports');}catch(error){status(error.message);}finally{saving=false;$('saveScan').disabled=!files.length;$('chooseScanPhotos').disabled=false;}}
 let loadedCity='',clinicLoading=false;
 async function loadClinics(){
  const city=state.profile.city;const list=$('clinicList');
@@ -133,8 +202,25 @@ document.addEventListener('DOMContentLoaded',async()=>{
  document.querySelectorAll('#view-profile input,#view-profile textarea').forEach(el=>{if(el.type!=='file')el.value='';});
  document.querySelectorAll('img[src*="unsplash.com"]').forEach(img=>img.src='/images/dermaguard-logo.svg');
  $('scanHistoryList').replaceChildren();$('welcomePatientName').textContent='there';$('sidebarPatientName').textContent='Your profile';$('sidebarPatientLocation').textContent='';
- $('cameraToggleBtn').remove();$('scanFileInput').multiple=true;$('scanFileInput').accept='image/jpeg,image/png,image/webp';$('patientSymptomInput').value='';
- const panel=$('uploadedImagePreview').closest('.grid');const findings=panel.children[1];findings.replaceChildren(node('h3','Private skin record','font-bold text-xl'),node('p','Upload 1–3 photos of the same area. Clinical analysis and automated skin-content detection require a validated model.','text-sm text-slate-600'));const select=node('select',undefined,'field');select.id='caseSelect';select.onchange=()=>selectCase(select.value);const title=node('input',undefined,'field');title.id='caseTitle';title.placeholder='Name for a new skin observation';title.maxLength=120;const dates=node('div',undefined,'space-y-3');dates.id='photoDates';const confirm=node('label','These photos show the skin area I want to record.','text-sm');const check=node('input');check.id='skinConsent';check.type='checkbox';confirm.prepend(check);const save=node('button','Save observation','button mt-4');save.id='saveScan';save.onclick=saveScanToHistory;findings.append(select,title,dates,confirm,save);$('scanSourceLabel').textContent='Waiting for image';$('scanFindingNote').textContent='No automated findings have been generated.';
+ $('cameraToggleBtn').remove();
+ const scanView = $('view-scan');
+ scanView.querySelector('h2').textContent = 'Scan Studio';
+ scanView.querySelector('h2').previousElementSibling.remove();
+ $('scanSourceLabel').previousElementSibling.textContent = 'Photo preview';
+ $('uploadedImagePreview').alt = 'Selected skin photo';
+ const fileInput = $('scanFileInput');
+ fileInput.multiple = true;
+ fileInput.accept = 'image/jpeg,image/png,image/webp';
+ fileInput.removeAttribute('onchange');
+ fileInput.addEventListener('change', handleImageUpload);
+ const oldPicker = fileInput.closest('label');
+ const picker = node('button', 'Choose photos', oldPicker.className);
+ picker.id = 'chooseScanPhotos';
+ picker.type = 'button';
+ picker.onclick = () => fileInput.click();
+ oldPicker.replaceWith(picker, fileInput);
+ $('patientSymptomInput').value = '';
+ const panel=$('uploadedImagePreview').closest('.grid');const findings=panel.children[1];findings.replaceChildren(node('h3','Private skin record','font-bold text-xl'),node('p','Choose 1–3 photos of the same area. DermaGuard checks the files and saves a private observation. Clinical image analysis is unavailable.','text-sm text-slate-600'));const select=node('select',undefined,'field');select.id='caseSelect';select.onchange=()=>selectCase(select.value);const title=node('input',undefined,'field');title.id='caseTitle';title.placeholder='Name for a new skin observation';title.maxLength=120;const dates=node('div',undefined,'space-y-3');dates.id='photoDates';const confirm=node('label','These photos show the skin area I want to record.','text-sm');const check=node('input');check.id='skinConsent';check.type='checkbox';confirm.prepend(check);const save=node('button','Save observation','button mt-4');save.id='saveScan';save.onclick=saveScanToHistory;findings.append(select,title,dates,confirm,save);$('scanFindingNote').role='status';clearPhotoSelection();
  const progression=$('view-progression');const metric=Array.from(progression.children).find(el=>el.textContent.includes('Diameter Expansion'));if(metric)metric.replaceChildren(node('p','Measurements and image-based comparisons are unavailable until a validated model is connected.','text-sm text-slate-500'));$('progAiResponse').textContent='Ask about the dates and notes in your selected case.';const elapsed=node('p',undefined,'text-sm');elapsed.id='elapsedTime';progression.prepend(elapsed);
  document.querySelectorAll('.tracking-card').forEach(card=>{card.onclick=()=>document.querySelectorAll('.tracking-card').forEach(c=>c.setAttribute('aria-pressed',String(c===card)));});
  const trackingConsent=node('label',' Allow selected-case notes to be sent to the AI provider for replies.','block text-xs text-slate-600');const consentCopy=node('input');consentCopy.type='checkbox';consentCopy.id='trackingConsent';trackingConsent.prepend(consentCopy);$('progAiResponse').parentElement.before(trackingConsent);consentCopy.onchange=()=>{$('chatConsent').checked=consentCopy.checked;};
