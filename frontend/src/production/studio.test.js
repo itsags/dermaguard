@@ -11,6 +11,37 @@ async function boot(data,onRequest=()=>{}){
  return dom;
 }
 const base={profile:{display_name:'Test Person',city:'',email:'test@example.com'},cases:[],scans:[]};
+it('shows the newly saved observation in Scan Studio and opens its report',async()=>{
+ let request;
+ const dom=await boot(base,message=>{if(message.action==='scan')request=message;});
+ const win=dom.window,doc=win.document;
+ win.switchTab('scan');
+ win.URL.createObjectURL=()=> 'blob:photo';
+ win.URL.revokeObjectURL=()=>{};
+ win.Image=class {
+  naturalWidth=640;
+  naturalHeight=480;
+  set src(_url){queueMicrotask(()=>this.onload());}
+ };
+ const input=doc.querySelector('#scanFileInput');
+ Object.defineProperty(input,'files',{value:[new win.File(['photo'],'sample.jpg',{type:'image/jpeg'})]});
+ input.dispatchEvent(new win.Event('change'));
+ await new Promise(resolve=>setTimeout(resolve,0));
+ doc.querySelector('#skinConsent').checked=true;
+ doc.querySelector('#saveScan').click();
+ const observation={id:'saved',case_id:'case',request_id:request.payload.request_id,created_at:'2026-11-14T10:00:00Z',notes:'My observation',report:{summary:'Record saved'},images:[{url:'https://example.com/photo',captured_at:'2026-11-14T09:00:00Z'}]};
+ const data={...base,cases:[{id:'case',title:'Left arm'}],scans:[{...observation,id:'other',request_id:'different',notes:'Other observation'},observation]};
+ win.dispatchEvent(new win.MessageEvent('message',{origin:'http://localhost',source:win.parent,data:{rpcResult:true,id:request.id,result:data}}));
+ await Promise.resolve();
+ const result=doc.querySelector('#scanResult');
+ expect(doc.querySelector('#view-scan').classList.contains('hidden')).toBe(false);
+ expect(result.textContent).toContain('My observation');
+ expect(result.textContent).not.toContain('Other observation');
+ expect(result.querySelector('img').src).toBe('https://example.com/photo');
+ Array.from(result.querySelectorAll('button')).find(button=>button.textContent==='View report').click();
+ expect(doc.activeElement.dataset.scanId).toBe('saved');
+ win.close();
+});
 it('checks decoded photos before enabling save and clears a rejected replacement',async()=>{
  const dom=await boot(base),win=dom.window,doc=win.document;
  const picker=doc.querySelector('#scanFileInput'), save=doc.querySelector('#saveScan');
