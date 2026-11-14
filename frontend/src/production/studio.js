@@ -77,6 +77,20 @@ function allPhotos(){return state.scans.filter(row=>!selectedCase||row.case_id==
 function renderTracking(){const images=allPhotos();document.querySelectorAll('.tracking-image').forEach((slot,index)=>{slot.replaceChildren();if(images[index])slot.append(photo(images[index]));else slot.textContent='Waiting for image';const card=slot.closest('.tracking-card');if(card){const label=Array.from(card.children).find(el=>el!==slot&&['Waiting for image','Photo saved'].includes(el.textContent.trim()));if(label)label.textContent=images[index]?'Photo saved':'Waiting for image';card.querySelector('[data-date]')?.remove();const date=node('p',images[index]?new Date(images[index].captured_at).toLocaleString():'No photo saved','text-xs text-slate-500');date.dataset.date='true';card.append(date);}});const elapsed=$('elapsedTime');if(elapsed)elapsed.textContent=images.length>1?Math.round((new Date(images.at(-1).captured_at)-new Date(images[0].captured_at))/86400000)+' days between first and latest photo':'Add dated photos of the same area to compare.';}
 let savedResultId;
 
+function measurementDetails(row) {
+ const measurement = row.report?.measurements;
+ if (measurement?.diameter_mm == null) return [];
+ const details = [['Current diameter (entered)', measurement.diameter_mm + ' mm']];
+ if (measurement.previous_diameter_mm != null) {
+  const change = measurement.change_mm;
+  details.push(
+   ['Previous diameter (entered)', measurement.previous_diameter_mm + ' mm'],
+   ['Change between entered measurements', (change > 0 ? '+' : '') + change + ' mm'],
+  );
+ }
+ return details;
+}
+
 function renderScanResult() {
  const result = $('scanResult');
  if (!result) return;
@@ -97,6 +111,7 @@ function renderScanResult() {
   ['Saved on', new Date(row.created_at).toLocaleString()],
   ['Photos saved', String(row.images.length)],
   ['Capture dates', row.images.map(image => new Date(image.captured_at).toLocaleString()).join(' · ')],
+  ...measurementDetails(row),
   ['Your notes', row.notes || 'No notes added'],
  ]) {
   const detail = node('div', undefined, 'min-w-0 rounded-xl border border-slate-200 bg-white p-3');
@@ -104,7 +119,14 @@ function renderScanResult() {
   details.append(detail);
  }
  const gallery = node('div', undefined, 'grid content-start gap-3');
- row.images.forEach(image => gallery.append(photo(image, 'h-48 w-full rounded-xl bg-slate-50 object-contain')));
+ row.images.forEach(image => {
+  const figure = node('figure', undefined, 'space-y-2');
+  figure.append(
+   photo(image, 'h-56 w-full rounded-xl bg-slate-50 object-contain'),
+   node('figcaption', new Date(image.captured_at).toLocaleString(), 'text-xs text-slate-500'),
+  );
+  gallery.append(figure);
+ });
  const information = node('div', undefined, 'min-w-0 space-y-3');
  const actions = node('div', undefined, 'flex flex-wrap gap-2');
  const view = node('button', 'View report', 'button');
@@ -145,8 +167,8 @@ async function deleteSavedScan(row) {
   renderReports();
  }
 }
-function renderReports(){const list=$('reportList');list.replaceChildren();const filtered=state.scans.filter(row=>!$('reportFrom').value||row.created_at.slice(0,10)>=$('reportFrom').value);if(!filtered.length)list.append(node('p','No saved reports for this date range.','p-5 text-slate-500'));filtered.forEach(row=>{const card=node('article',undefined,'action-card rounded-2xl p-5 space-y-3');card.dataset.scanId=row.id;card.tabIndex=-1;card.append(node('h3',new Date(row.created_at).toLocaleString(),'font-bold'),node('p',state.cases.find(c=>c.id===row.case_id)?.title||'Skin observation','text-sm font-semibold'),node('p',row.notes||'No description provided.','text-sm'),node('p',row.report.summary,'text-sm text-slate-600'));const gallery=node('div',undefined,'grid gap-3 sm:grid-cols-3');row.images.forEach(image=>{const figure=node('figure');figure.append(photo(image,'w-full h-48 object-contain rounded-xl bg-slate-50'),node('figcaption',new Date(image.captured_at).toLocaleString(),'text-xs text-slate-500 mt-2'));gallery.append(figure);});card.append(gallery,node('p',row.report.notice||'Record only; no clinical diagnosis.','text-xs text-slate-500'));const button=node('button','Download PDF','button');button.onclick=()=>rpc('pdf',{id:row.id,progression:$('reportProgression').checked}).catch(e=>status(e.message));const print=node('button','Print / Save PDF','button ml-2');print.onclick=()=>printReport(row);const deleting=deletingScans.has(row.id);const remove=node('button',deleting?'Deleting…':'Delete scan','button ml-2 border border-red-200 bg-white text-red-700');remove.disabled=deleting;remove.onclick=()=>void deleteSavedScan(row);button.disabled=deleting;print.disabled=deleting;card.append(button,print,remove);if($('reportProgression').checked){const images=allPhotos();card.append(node('p','Selected case progression: '+images.map(i=>new Date(i.captured_at).toLocaleDateString()).join(' → '),'text-sm'));}list.append(card);});}
-function printReport(row){const win=window.open('','_blank');if(!win){status('Allow popups to print your report.');return;}win.document.title='DermaGuard report';const root=win.document.body;root.style.cssText='font:16px sans-serif;padding:40px;line-height:1.6';root.append(node('h1','DermaGuard observation report'),node('p',new Date(row.created_at).toLocaleString()),node('p',row.notes),node('p',row.report.summary),node('p',row.report.notice));if($('reportProgression').checked)allPhotos().forEach(image=>root.append(node('p','Photo date: '+new Date(image.captured_at).toLocaleString())));row.images.forEach(image=>{const img=photo(image);img.style.cssText='display:block;width:260px;height:220px;object-fit:contain;break-inside:avoid;margin:16px 0';root.append(node('p',new Date(image.captured_at).toLocaleString()),img);});Promise.all(Array.from(root.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;}))).then(()=>{win.focus();win.print();});}
+function renderReports(){const list=$('reportList');list.replaceChildren();const filtered=state.scans.filter(row=>!$('reportFrom').value||row.created_at.slice(0,10)>=$('reportFrom').value);if(!filtered.length)list.append(node('p','No saved reports for this date range.','p-5 text-slate-500'));filtered.forEach(row=>{const card=node('article',undefined,'action-card rounded-2xl p-5 space-y-3');card.dataset.scanId=row.id;card.tabIndex=-1;card.append(node('h3',new Date(row.created_at).toLocaleString(),'font-bold'),node('p',state.cases.find(c=>c.id===row.case_id)?.title||'Skin observation','text-sm font-semibold'),node('p',row.notes||'No description provided.','text-sm'),node('p',row.report.summary,'text-sm text-slate-600'));const gallery=node('div',undefined,'grid gap-3 sm:grid-cols-3');row.images.forEach(image=>{const figure=node('figure');figure.append(photo(image,'w-full h-48 object-contain rounded-xl bg-slate-50'),node('figcaption',new Date(image.captured_at).toLocaleString(),'text-xs text-slate-500 mt-2'));gallery.append(figure);});for(const [label,value] of measurementDetails(row))card.append(node('p',label+': '+value,'text-sm'));card.append(gallery,node('p',row.report.notice||'Record only; no clinical diagnosis.','text-xs text-slate-500'));const button=node('button','Download PDF','button');button.onclick=()=>rpc('pdf',{id:row.id,progression:$('reportProgression').checked}).catch(e=>status(e.message));const print=node('button','Print / Save PDF','button ml-2');print.onclick=()=>printReport(row);const deleting=deletingScans.has(row.id);const remove=node('button',deleting?'Deleting…':'Delete scan','button ml-2 border border-red-200 bg-white text-red-700');remove.disabled=deleting;remove.onclick=()=>void deleteSavedScan(row);button.disabled=deleting;print.disabled=deleting;card.append(button,print,remove);if($('reportProgression').checked){const images=allPhotos();card.append(node('p','Selected case progression: '+images.map(i=>new Date(i.captured_at).toLocaleDateString()).join(' → '),'text-sm'));}list.append(card);});}
+function printReport(row){const win=window.open('','_blank');if(!win){status('Allow popups to print your report.');return;}win.document.title='DermaGuard report';const root=win.document.body;root.style.cssText='font:16px sans-serif;padding:40px;line-height:1.6';root.append(node('h1','DermaGuard observation report'),node('p',new Date(row.created_at).toLocaleString()),node('p',row.notes),node('p',row.report.summary),node('p',row.report.notice));for(const [label,value] of measurementDetails(row))root.append(node('p',label+': '+value));if($('reportProgression').checked)allPhotos().forEach(image=>root.append(node('p','Photo date: '+new Date(image.captured_at).toLocaleString())));row.images.forEach(image=>{const img=photo(image);img.style.cssText='display:block;width:260px;height:220px;object-fit:contain;break-inside:avoid;margin:16px 0';root.append(node('p',new Date(image.captured_at).toLocaleString()),img);});Promise.all(Array.from(root.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;}))).then(()=>{win.focus();win.print();});}
 function renderHistory(){const history=$('scanHistoryList');history.replaceChildren();if(!state.scans.length)history.append(node('p','No saved scans yet.','text-sm text-slate-500'));state.scans.forEach(row=>{const button=node('button',undefined,'w-full text-left rounded-xl border border-slate-200 p-3 space-y-2');button.append(node('strong',new Date(row.created_at).toLocaleDateString()),photo(row.images[0],'w-full h-24 object-contain rounded-lg'),node('p',row.notes||'Skin observation','text-xs'));button.onclick=()=>{selectCase(row.case_id);switchTab('reports');renderReports();};history.append(button);});}
 function apply(data){state=data;const p=state.profile;const localMode=state.capabilities?.chat_mode==='local-records';if($('chatConsent'))$('chatConsent').parentElement.hidden=localMode;if($('trackingConsent'))$('trackingConsent').parentElement.hidden=localMode;if(localMode&&!lastQuestions.has('dashboardAiText')&&$('dashboardAiText'))$('dashboardAiText').textContent='Local record guide is ready. Ask about scans, saved dates, reports, nearby care or your profile. Generative AI is not connected yet.';setLanguage(p.language||'EN',false);selectedCase=selectedCase||state.cases[0]?.id||'';const values={Name:p.display_name,Email:p.email,Phone:p.phone,City:p.city,Street:p.street,Notes:p.notes,Lang:lang};Object.entries(values).forEach(([key,value])=>{const el=$('inputPatient'+key);if(el){el.value=value||'';if(key==='Email')el.readOnly=true;}});['sidebarPatientName','reportPatientName'].forEach(id=>{if($(id))$(id).textContent=p.display_name||'Your profile';});$('welcomePatientName').textContent=p.display_name?.trim().split(/\s+/)[0]||'there';$('sidebarPatientLocation').textContent=p.city||'Add your location';document.querySelectorAll('img[alt="Patient"],#sidebarAvatar,#profileAvatarPreview').forEach(img=>{img.src=p.avatar||'/images/dermaguard-logo.svg';});const select=$('caseSelect');select.replaceChildren(new Option('New skin observation',''),...state.cases.map(c=>new Option(c.title,c.id)));select.value=selectedCase;renderHistory();renderTracking();renderReports();renderScanResult();}
 let profileSaving=false;async function savePatientDetails(){if(profileSaving)return;profileSaving=true;try{status('Saving profile…');const input=id=>$(id).value.trim();const data=await rpc('profile',{name:input('inputPatientName'),city:input('inputPatientCity'),phone:input('inputPatientPhone'),street:input('inputPatientStreet'),notes:input('inputPatientNotes'),language:input('inputPatientLang'),avatar_path:state.profile.avatar_path,file:$('profileAvatarInput').files[0]});apply(data);profileDirty=false;$('profileAvatarInput').value='';status('Profile saved.');}catch(error){status(error.message);}finally{profileSaving=false;}}
@@ -229,6 +251,14 @@ async function saveScanToHistory() {
   status('Enter valid photo dates, not in the future.');
   return;
  }
+ const current = $('scanDiameter');
+ const previous = $('scanPreviousDiameter');
+ if (!current.reportValidity() || !previous.reportValidity()) return;
+ if (previous.value && !current.value) {
+  status('Enter a current diameter to compare measurements.');
+  current.focus();
+  return;
+ }
  saving = true;
  $('saveScan').disabled = true;
  $('chooseScanPhotos').disabled = true;
@@ -242,6 +272,8 @@ async function saveScanToHistory() {
    title: $('caseTitle').value.trim(),
    notes: $('patientSymptomInput').value.trim(),
    request_id: requestId,
+   diameter_mm: current.value ? current.valueAsNumber : null,
+   previous_diameter_mm: previous.value ? previous.valueAsNumber : null,
   });
   const saved = data.scans.find(scan => scan.request_id === requestId);
   if (saved) {
@@ -252,6 +284,7 @@ async function saveScanToHistory() {
   clearPhotoSelection();
   $('patientSymptomInput').value = '';
   $('caseTitle').value = '';
+  current.value = previous.value = '';
   status('Observation saved.');
   const result = $('scanResult');
   if (saved && !$('view-scan').classList.contains('hidden')) result.focus();
@@ -313,7 +346,53 @@ document.addEventListener('DOMContentLoaded',async()=>{
  picker.onclick = () => fileInput.click();
  oldPicker.replaceWith(picker, fileInput);
  $('patientSymptomInput').value = '';
- const panel=$('uploadedImagePreview').closest('.grid');const findings=panel.children[1];findings.replaceChildren(node('h3','Private skin record','font-bold text-xl'),node('p','Choose 1–3 photos of the same area. DermaGuard checks the files and saves a private observation. Clinical image analysis is unavailable.','text-sm text-slate-600'));const select=node('select',undefined,'field');select.id='caseSelect';select.onchange=()=>selectCase(select.value);const title=node('input',undefined,'field');title.id='caseTitle';title.placeholder='Name for a new skin observation';title.maxLength=120;const dates=node('div',undefined,'space-y-3');dates.id='photoDates';const confirm=node('label','These photos show the skin area I want to record.','text-sm');const check=node('input');check.id='skinConsent';check.type='checkbox';confirm.prepend(check);const save=node('button','Save observation','button mt-4');save.id='saveScan';save.onclick=saveScanToHistory;findings.append(select,title,dates,confirm,save);$('scanFindingNote').role='status';clearPhotoSelection();
+ const panel = $('uploadedImagePreview').closest('.grid');
+ const findings = panel.children[1];
+ panel.children[0].append(picker, fileInput);
+ picker.classList.add('mt-3', 'justify-center');
+ const notes = $('patientSymptomInput');
+ const notesCard = notes.parentElement;
+ notesCard.querySelector('label').textContent = 'Describe the spot and any changes';
+ const select = node('select', undefined, 'field');
+ select.id = 'caseSelect';
+ select.setAttribute('aria-label', 'Skin observation');
+ select.onchange = () => selectCase(select.value);
+ const title = node('input', undefined, 'field');
+ title.id = 'caseTitle';
+ title.placeholder = 'Name for a new skin observation';
+ title.setAttribute('aria-label', 'Observation name');
+ title.maxLength = 120;
+ const measurements = node('fieldset', undefined, 'grid gap-3 rounded-xl border border-slate-200 p-3 sm:grid-cols-2');
+ measurements.append(node('legend', 'Measurements you entered (optional)', 'px-1 text-sm font-semibold'));
+ for (const [id, text] of [['scanDiameter', 'Current diameter (mm)'], ['scanPreviousDiameter', 'Previous diameter (mm)']]) {
+  const label = node('label', text, 'space-y-1 text-sm');
+  const input = node('input', undefined, 'field w-full');
+  input.id = id;
+  input.type = 'number';
+  input.inputMode = 'decimal';
+  input.min = '0.001';
+  input.max = '1000';
+  input.step = 'any';
+  label.append(input);
+  measurements.append(label);
+ }
+ const dates = node('div', undefined, 'space-y-3');
+ dates.id = 'photoDates';
+ const confirm = node('label', ' These photos show the skin area I want to record.', 'text-sm');
+ const check = node('input');
+ check.id = 'skinConsent';
+ check.type = 'checkbox';
+ confirm.prepend(check);
+ const save = node('button', 'Save observation', 'button mt-4 w-full');
+ save.id = 'saveScan';
+ save.onclick = saveScanToHistory;
+ findings.replaceChildren(
+  node('h3', 'Private skin record', 'text-xl font-bold'),
+  node('p', 'Choose 1–3 photos of the same area. Use a ruler if you want to record a diameter.', 'text-sm text-slate-600'),
+  select, title, notesCard, measurements, dates, confirm, save,
+ );
+ $('scanFindingNote').role = 'status';
+ clearPhotoSelection();
  const scanResult = node('section', undefined, 'action-card rounded-2xl p-5 space-y-3');
  scanResult.id = 'scanResult';
  scanResult.tabIndex = -1;

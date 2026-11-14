@@ -51,7 +51,7 @@ export function ProductionStudio({session}:{session:Session}) {
      await saveScanPhotos(
       images,
       async (path,index)=>{const {error}=await bucket.upload(path,files[index]);if(error)throw error;},
-      photos=>api('/scans',{case_id:caseId,request_id:payload.request_id,notes:payload.notes,images:photos}),
+      photos=>api('/scans',{case_id:caseId,request_id:payload.request_id,notes:payload.notes,images:photos,diameter_mm:payload.diameter_mm,previous_diameter_mm:payload.previous_diameter_mm}),
       paths=>bucket.remove(paths),
      );
      result=await load();

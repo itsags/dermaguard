@@ -34,6 +34,21 @@ class ScanCreate(BaseModel):
     request_id: UUID
     notes: str = Field(default='',max_length=2000)
     images: list[ScanImage] = Field(min_length=1,max_length=3)
+    diameter_mm: float | None = Field(default=None, gt=0, le=1000)
+    previous_diameter_mm: float | None = Field(default=None, gt=0, le=1000)
+
+
+def measurement_lines(report):
+    measurement = report.get('measurements') or {}
+    current = measurement.get('diameter_mm')
+    previous = measurement.get('previous_diameter_mm')
+    if current is None:
+        return []
+    lines = [f'Current diameter: {current:g} mm']
+    if previous is not None:
+        change = measurement['change_mm']
+        lines.extend([f'Previous diameter: {previous:g} mm', f'Change: {(change or 0):+g} mm'])
+    return lines
 
 async def owned_case(case_id,user_id):
     rows=await database('GET','skin_cases',user_id,f'?id=eq.{case_id}&user_id=eq.{user_id}')
@@ -69,11 +84,20 @@ async def create_scan(payload:ScanCreate,user_id:str=Depends(current_user_id)):
     await owned_case(payload.case_id,user_id)
     existing=await database('GET','scan_records',user_id,f'?user_id=eq.{user_id}&request_id=eq.{payload.request_id}')
     if existing:return existing[0]
+    if payload.previous_diameter_mm is not None and payload.diameter_mm is None:
+        raise HTTPException(422, 'Enter a current diameter to compare measurements.')
     if len({i.path for i in payload.images})!=len(payload.images):raise HTTPException(422,'Each photo must be different')
     for image in payload.images:
         if image.captured_at.timestamp()>datetime.now(timezone.utc).timestamp()+300:raise HTTPException(422,'Photo date cannot be in the future')
         await validate_stored_image(image.path,user_id,payload.case_id)
     report={'status':'recorded','model_status':'unavailable','scope_check':'unavailable','summary':'Private photo record saved. Clinical image analysis is not enabled. No cancer classification, severity, risk score, or treatment recommendation has been generated.','notice':'A photo cannot establish a diagnosis. A qualified clinician should assess concerning changes.'}
+    if payload.diameter_mm is not None:
+        report['measurements'] = {'source': 'user_entered', 'diameter_mm': payload.diameter_mm}
+        if payload.previous_diameter_mm is not None:
+            report['measurements'].update(
+                previous_diameter_mm=payload.previous_diameter_mm,
+                change_mm=round(payload.diameter_mm - payload.previous_diameter_mm, 3),
+            )
     rows=await database('POST','scan_records',user_id,payload={'user_id':user_id,'case_id':str(payload.case_id),'request_id':str(payload.request_id),'notes':payload.notes,'images':[i.model_dump(mode='json') for i in payload.images],'report':report})
     return rows[0]
 
@@ -147,6 +171,11 @@ async def pdf(scan_id:UUID,progression:bool=False,user_id:str=Depends(current_us
     text('DermaGuard','Title');text('Private skin observation report','Heading2')
     text('Record: '+str(scan_id));text('Created: '+row['created_at']);text('User description','Heading2');text(row['notes'] or 'No description provided.')
     text('Analysis status','Heading2');text(row['report'].get('summary','No clinical analysis available.'));text(row['report'].get('notice','This is not a diagnosis.'))
+    measurements = measurement_lines(row['report'])
+    if measurements:
+        text('Measurements entered by user', 'Heading2')
+        for line in measurements:
+            text(line)
     records=[row]
     if progression:
         records=await database('GET','scan_records',user_id,f"?user_id=eq.{user_id}&case_id=eq.{row['case_id']}&order=created_at.desc&limit=3")
