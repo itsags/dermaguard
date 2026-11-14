@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import markup from '../reference/prototype.html?raw';
 import bridge from './studio.js?raw';
 import studioCss from '../styles.css?inline';
+import { ApiRequestError, saveScanPhotos } from './saveScanPhotos';
 
 export function ProductionStudio({session}:{session:Session}) {
  const frame=useRef<HTMLIFrameElement>(null);
@@ -17,7 +18,7 @@ export function ProductionStudio({session}:{session:Session}) {
    const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw new Error('Please sign in again.');
    const base=import.meta.env.VITE_API_URL;if(!base)throw new Error('Backend URL is not configured.');
    const response=await fetch(base.replace(/\/$/,'')+'/api/v1'+path,{method,headers:{Authorization:'Bearer '+data.session.access_token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
-   if(!response.ok){const detail=await response.json().catch(()=>({}));throw new Error(detail.detail||'Request failed.');}
+   if(!response.ok){const detail=await response.json().catch(()=>({}));throw new ApiRequestError(response.status,typeof detail.detail==='string'?detail.detail:'Request failed.');}
    if(response.status===204)return;
    return binary?response.blob():response.json();
   }
@@ -41,14 +42,18 @@ export function ProductionStudio({session}:{session:Session}) {
      const row={user_id:session.user.id,display_name:payload.name,city:payload.city,phone:payload.phone,street:payload.street,notes:payload.notes,language:payload.language,avatar_path:path,updated_at:new Date().toISOString()};
      const {error}=await supabase.from('patient_profiles').upsert(row);if(error)throw error;const profile={...row,email:session.user.email,avatar:path?await sign(path):null};result=latest?{...latest,profile}:await load();latest=result;
     }else if(action==='scan'){
-     if(!payload.files?.length||payload.files.length>3)throw new Error('Choose 1 to 3 photos.');
+     const files=payload.files as File[];
+     if(!files?.length||files.length>3)throw new Error('Choose 1 to 3 photos.');
+     if(files.some(file=>!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024))throw new Error('Each photo must be JPEG, PNG or WebP, up to 5 MB.');
      let caseId=payload.case_id;
      if(!caseId){const {data,error}=await supabase.from('skin_cases').insert({title:payload.title||'Skin observation',body_area:'Not specified'}).select().single();if(error)throw error;caseId=data.id;}
-     const uploaded:string[]=[];
-     try{
-      const images=await Promise.all(payload.files.map(async(file:File,i:number)=>{if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024)throw new Error('Each photo must be JPEG, PNG or WebP, up to 5 MB.');const path=`${session.user.id}/${caseId}/${makeId()}`;const {error}=await bucket.upload(path,file);if(error)throw error;uploaded.push(path);return {path,captured_at:payload.dates[i]};}));
-      await api('/scans',{case_id:caseId,request_id:payload.request_id,notes:payload.notes,images});
-     }catch(error){/* Keep uploads on uncertain server responses: deleting could corrupt a committed record. */throw error;}
+     const images=files.map((_,index)=>({path:`${session.user.id}/${caseId}/${makeId()}`,captured_at:payload.dates[index]}));
+     await saveScanPhotos(
+      images,
+      async (path,index)=>{const {error}=await bucket.upload(path,files[index]);if(error)throw error;},
+      photos=>api('/scans',{case_id:caseId,request_id:payload.request_id,notes:payload.notes,images:photos}),
+      paths=>bucket.remove(paths),
+     );
      result=await load();
     }else if(action==='deleteScan'){
      await api(`/scans/${encodeURIComponent(payload.id)}`,undefined,false,'DELETE');
