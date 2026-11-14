@@ -87,10 +87,15 @@ async def create_scan(payload:ScanCreate,user_id:str=Depends(current_user_id)):
     if payload.previous_diameter_mm is not None and payload.diameter_mm is None:
         raise HTTPException(422, 'Enter a current diameter to compare measurements.')
     if len({i.path for i in payload.images})!=len(payload.images):raise HTTPException(422,'Each photo must be different')
+    photo_checks = []
     for image in payload.images:
         if image.captured_at.timestamp()>datetime.now(timezone.utc).timestamp()+300:raise HTTPException(422,'Photo date cannot be in the future')
-        await validate_stored_image(image.path,user_id,payload.case_id)
+        content = await validate_stored_image(image.path,user_id,payload.case_id)
+        with Image.open(BytesIO(content)) as decoded:
+            photo_checks.append({'width_px': decoded.width, 'height_px': decoded.height,
+                                 'format': decoded.format, 'bytes': len(content)})
     report={'status':'recorded','model_status':'unavailable','scope_check':'unavailable','summary':'Private photo record saved. Clinical image analysis is not enabled. No cancer classification, severity, risk score, or treatment recommendation has been generated.','notice':'A photo cannot establish a diagnosis. A qualified clinician should assess concerning changes.'}
+    report['photo_checks'] = photo_checks
     if payload.diameter_mm is not None:
         report['measurements'] = {'source': 'user_entered', 'diameter_mm': payload.diameter_mm}
         if payload.previous_diameter_mm is not None:
@@ -176,6 +181,10 @@ async def pdf(scan_id:UUID,progression:bool=False,user_id:str=Depends(current_us
         text('Measurements entered by user', 'Heading2')
         for line in measurements:
             text(line)
+    if row['report'].get('photo_checks'):
+        text('Uploaded photo checks', 'Heading2')
+        for index, check in enumerate(row['report']['photo_checks'], 1):
+            text(f"Photo {index}: {check['format']} | {check['width_px']} x {check['height_px']} pixels | {check['bytes']:,} bytes")
     records=[row]
     if progression:
         records=await database('GET','scan_records',user_id,f"?user_id=eq.{user_id}&case_id=eq.{row['case_id']}&order=created_at.desc&limit=3")

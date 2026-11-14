@@ -1,4 +1,6 @@
 from uuid import uuid4
+from io import BytesIO
+from PIL import Image
 import asyncio
 from unittest.mock import AsyncMock, patch
 import pytest
@@ -8,6 +10,11 @@ from app.main import app
 from app.security import current_user_id
 from app.connected import validate_stored_image
 client=TestClient(app)
+
+def sample_photo():
+ output = BytesIO()
+ Image.new('RGB', (240, 160), 'pink').save(output, format='JPEG')
+ return output.getvalue()
 @pytest.fixture
 def login():
  app.dependency_overrides[current_user_id]=lambda:'user-one'
@@ -55,10 +62,13 @@ def test_delete_scan_hides_other_accounts(login):
   remove.assert_not_awaited()
 def test_create_checks_photos_and_records_unavailable_model(login):
  cid=str(uuid4());p={'case_id':cid,'request_id':str(uuid4()),'images':[{'path':'user-one/'+cid+'/a','captured_at':'2026-11-01T00:00:00Z'}]}
- with patch('app.connected.database',new=AsyncMock(side_effect=[[{'id':cid}],[],[{'id':'saved'}]])) as db,patch('app.connected.validate_stored_image',new=AsyncMock()) as validate:
+ content = sample_photo()
+ with patch('app.connected.database',new=AsyncMock(side_effect=[[{'id':cid}],[],[{'id':'saved'}]])) as db,patch('app.connected.validate_stored_image',new=AsyncMock(return_value=content)) as validate:
   assert client.post('/api/v1/scans',json=p).status_code==201
   validate.assert_awaited_once()
   assert db.call_args.kwargs['payload']['report']['model_status']=='unavailable'
+  assert db.call_args.kwargs['payload']['report']['photo_checks'] == [
+   {'width_px': 240, 'height_px': 160, 'format': 'JPEG', 'bytes': len(content)}]
 def test_pdf_valid_and_not_cached(login):
  row={'created_at':'2026-11-09','notes':'Observed change','images':[],'report':{'summary':'Recorded','notice':'Not a diagnosis'}}
  with patch('app.connected.database',new=AsyncMock(return_value=[row])):
@@ -72,7 +82,7 @@ def test_scan_saves_only_user_entered_measurements(login):
  payload = {'case_id': case_id, 'request_id': str(uuid4()), 'diameter_mm': 6.8,
             'previous_diameter_mm': 6, 'images': [{'path': f'user-one/{case_id}/photo',
                                                  'captured_at': '2026-11-01T00:00:00Z'}]}
- with patch('app.connected.database', new=AsyncMock(side_effect=[[{'id': case_id}], [], [{'id': 'saved'}]])) as db, patch('app.connected.validate_stored_image', new=AsyncMock()):
+ with patch('app.connected.database', new=AsyncMock(side_effect=[[{'id': case_id}], [], [{'id': 'saved'}]])) as db, patch('app.connected.validate_stored_image', new=AsyncMock(return_value=sample_photo())):
   assert client.post('/api/v1/scans', json=payload).status_code == 201
   report = db.call_args.kwargs['payload']['report']
   assert report['model_status'] == 'unavailable'

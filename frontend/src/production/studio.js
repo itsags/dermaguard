@@ -91,6 +91,50 @@ function measurementDetails(row) {
  return details;
 }
 
+function reportDetails(items, columns = 'sm:grid-cols-2') {
+ const details = node('dl', undefined, 'grid gap-3 ' + columns);
+ for (const [label, value] of items) {
+  const item = node('div', undefined, 'min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3');
+  item.append(node('dt', label, 'text-xs font-semibold text-slate-600'), node('dd', value, 'mt-1 break-words text-sm'));
+  details.append(item);
+ }
+ return details;
+}
+
+function photoCheckDetails(row) {
+ return (row.report?.photo_checks || []).map((check, index) => [
+  'Photo ' + (index + 1) + ' · file verified',
+  check.format + ' · ' + check.width_px + ' × ' + check.height_px + ' px · ' + (check.bytes / 1024).toFixed(1) + ' KB',
+ ]);
+}
+
+function observationBody(row) {
+ const layout = node('div', undefined, 'observation-body grid gap-5 md:grid-cols-2');
+ const gallery = node('div', undefined, 'grid content-start gap-3');
+ row.images.forEach(image => {
+  const figure = node('figure', undefined, 'space-y-2');
+  figure.append(photo(image, 'h-56 w-full rounded-xl bg-slate-50 object-contain'),
+   node('figcaption', new Date(image.captured_at).toLocaleString(), 'text-xs text-slate-500'));
+  gallery.append(figure);
+ });
+ const details = node('div', undefined, 'space-y-3 min-w-0');
+ const summary = node('header', undefined, 'rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-1');
+ summary.append(node('p', 'Observation result', 'text-xs uppercase font-bold text-slate-600'),
+  node('h3', 'Clinical analysis unavailable', 'text-lg font-bold'),
+  node('p', 'The checks below describe the uploaded files. Lesion diameter and change are unavailable from these photos.', 'text-sm text-slate-600'));
+ const notes = node('div', undefined, 'rounded-xl border border-slate-200 p-3 space-y-1');
+ notes.append(node('h4', 'Your observations', 'font-semibold text-sm'),
+  node('p', row.notes || 'No notes added', 'text-sm whitespace-pre-wrap break-words'));
+ const checks = photoCheckDetails(row);
+ details.append(summary);
+ if (checks.length) details.append(reportDetails(checks));
+ const measurements = measurementDetails(row);
+ if (measurements.length) details.append(reportDetails(measurements));
+ details.append(notes);
+ layout.append(gallery, details);
+ return layout;
+}
+
 function renderScanResult() {
  const result = $('scanResult');
  if (!result) return;
@@ -100,34 +144,6 @@ function renderScanResult() {
  if (!row) return;
 
  const title = state.cases.find(item => item.id === row.case_id)?.title || 'Skin observation';
- const summary = node('header', undefined, 'rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-1');
- summary.append(
-  node('p', 'Observation saved', 'text-xs font-bold uppercase tracking-wide text-emerald-800'),
-  node('h3', title, 'text-lg font-bold'),
-  node('p', 'Clinical image analysis unavailable', 'text-sm text-slate-600'),
- );
- const details = node('dl', undefined, 'grid grid-cols-1 gap-3 sm:grid-cols-2');
- for (const [label, value] of [
-  ['Saved on', new Date(row.created_at).toLocaleString()],
-  ['Photos saved', String(row.images.length)],
-  ['Capture dates', row.images.map(image => new Date(image.captured_at).toLocaleString()).join(' · ')],
-  ...measurementDetails(row),
-  ['Your notes', row.notes || 'No notes added'],
- ]) {
-  const detail = node('div', undefined, 'min-w-0 rounded-xl border border-slate-200 bg-white p-3');
-  detail.append(node('dt', label, 'text-xs font-semibold text-slate-600'), node('dd', value, 'mt-1 break-words text-sm'));
-  details.append(detail);
- }
- const gallery = node('div', undefined, 'grid content-start gap-3');
- row.images.forEach(image => {
-  const figure = node('figure', undefined, 'space-y-2');
-  figure.append(
-   photo(image, 'h-56 w-full rounded-xl bg-slate-50 object-contain'),
-   node('figcaption', new Date(image.captured_at).toLocaleString(), 'text-xs text-slate-500'),
-  );
-  gallery.append(figure);
- });
- const information = node('div', undefined, 'min-w-0 space-y-3');
  const actions = node('div', undefined, 'flex flex-wrap gap-2');
  const view = node('button', 'View report', 'button');
  view.onclick = () => {
@@ -140,10 +156,11 @@ function renderScanResult() {
  const download = node('button', 'Download PDF', 'button');
  download.onclick = () => rpc('pdf', {id: row.id}).catch(error => status(error.message));
  actions.append(view, download);
- information.append(summary, details, actions);
- const layout = node('div', undefined, 'grid gap-5 md:grid-cols-2');
- layout.append(gallery, information);
- result.append(layout);
+ result.append(
+  node('h3', title, 'text-xl font-bold'),
+  node('p', 'Saved ' + new Date(row.created_at).toLocaleString(), 'text-xs text-slate-500'),
+  observationBody(row), actions,
+ );
 }
 
 const deletingScans = new Set();
@@ -167,8 +184,65 @@ async function deleteSavedScan(row) {
   renderReports();
  }
 }
-function renderReports(){const list=$('reportList');list.replaceChildren();const filtered=state.scans.filter(row=>!$('reportFrom').value||row.created_at.slice(0,10)>=$('reportFrom').value);if(!filtered.length)list.append(node('p','No saved reports for this date range.','p-5 text-slate-500'));filtered.forEach(row=>{const card=node('article',undefined,'action-card rounded-2xl p-5 space-y-3');card.dataset.scanId=row.id;card.tabIndex=-1;card.append(node('h3',new Date(row.created_at).toLocaleString(),'font-bold'),node('p',state.cases.find(c=>c.id===row.case_id)?.title||'Skin observation','text-sm font-semibold'),node('p',row.notes||'No description provided.','text-sm'),node('p',row.report.summary,'text-sm text-slate-600'));const gallery=node('div',undefined,'grid gap-3 sm:grid-cols-3');row.images.forEach(image=>{const figure=node('figure');figure.append(photo(image,'w-full h-48 object-contain rounded-xl bg-slate-50'),node('figcaption',new Date(image.captured_at).toLocaleString(),'text-xs text-slate-500 mt-2'));gallery.append(figure);});for(const [label,value] of measurementDetails(row))card.append(node('p',label+': '+value,'text-sm'));card.append(gallery,node('p',row.report.notice||'Record only; no clinical diagnosis.','text-xs text-slate-500'));const button=node('button','Download PDF','button');button.onclick=()=>rpc('pdf',{id:row.id,progression:$('reportProgression').checked}).catch(e=>status(e.message));const print=node('button','Print / Save PDF','button ml-2');print.onclick=()=>printReport(row);const deleting=deletingScans.has(row.id);const remove=node('button',deleting?'Deleting…':'Delete scan','button ml-2 border border-red-200 bg-white text-red-700');remove.disabled=deleting;remove.onclick=()=>void deleteSavedScan(row);button.disabled=deleting;print.disabled=deleting;card.append(button,print,remove);if($('reportProgression').checked){const images=allPhotos();card.append(node('p','Selected case progression: '+images.map(i=>new Date(i.captured_at).toLocaleDateString()).join(' → '),'text-sm'));}list.append(card);});}
-function printReport(row){const win=window.open('','_blank');if(!win){status('Allow popups to print your report.');return;}win.document.title='DermaGuard report';const root=win.document.body;root.style.cssText='font:16px sans-serif;padding:40px;line-height:1.6';root.append(node('h1','DermaGuard observation report'),node('p',new Date(row.created_at).toLocaleString()),node('p',row.notes),node('p',row.report.summary),node('p',row.report.notice));for(const [label,value] of measurementDetails(row))root.append(node('p',label+': '+value));if($('reportProgression').checked)allPhotos().forEach(image=>root.append(node('p','Photo date: '+new Date(image.captured_at).toLocaleString())));row.images.forEach(image=>{const img=photo(image);img.style.cssText='display:block;width:260px;height:220px;object-fit:contain;break-inside:avoid;margin:16px 0';root.append(node('p',new Date(image.captured_at).toLocaleString()),img);});Promise.all(Array.from(root.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;}))).then(()=>{win.focus();win.print();});}
+function reportContent(row) {
+ const observation = state.cases.find(item => item.id === row.case_id);
+ const content = node('div', undefined, 'report-content space-y-4');
+ content.append(
+  node('h3', 'DermaGuard observation report', 'text-lg font-bold'),
+  reportDetails([
+   ['Patient', state.profile.display_name || 'Your profile'],
+   ['Observation', observation?.title || 'Skin observation'],
+   ['Anatomical site', observation?.body_area || 'Not specified'],
+   ['Saved on', new Date(row.created_at).toLocaleString()],
+  ], 'sm:grid-cols-4'),
+  observationBody(row),
+  node('p', row.report.notice || 'For your observation records.', 'text-xs text-slate-500'),
+ );
+ if ($('reportProgression').checked) {
+  const dates = state.scans.filter(scan => scan.case_id === row.case_id)
+   .flatMap(scan => scan.images.map(image => new Date(image.captured_at)))
+   .sort((left, right) => left - right).slice(-3).map(date => date.toLocaleDateString());
+  content.append(node('p', 'Recent photo dates: ' + dates.join(' → '), 'text-sm'));
+ }
+ return content;
+}
+
+function renderReports() {
+ const list = $('reportList');
+ const from = $('reportFrom').value;
+ list.replaceChildren();
+ const filtered = state.scans.filter(row => !from || row.created_at.slice(0, 10) >= from);
+ if (!filtered.length) list.append(node('p', 'No saved reports for this date range.', 'p-5 text-slate-500'));
+ for (const row of filtered) {
+  const card = node('article', undefined, 'action-card rounded-2xl p-5 space-y-3');
+  card.dataset.scanId = row.id;
+  card.tabIndex = -1;
+  const actions = node('div', undefined, 'flex flex-wrap gap-2');
+  const download = node('button', 'Download PDF', 'button');
+  download.onclick = () => rpc('pdf', {id: row.id, progression: $('reportProgression').checked}).catch(error => status(error.message));
+  const print = node('button', 'Print / Save PDF', 'button');
+  print.onclick = () => printReport(row);
+  const deleting = deletingScans.has(row.id);
+  const remove = node('button', deleting ? 'Deleting…' : 'Delete scan', 'button border border-red-200 bg-white text-red-700');
+  remove.onclick = () => void deleteSavedScan(row);
+  download.disabled = print.disabled = remove.disabled = deleting;
+  actions.append(download, print, remove);
+  card.append(reportContent(row), actions);
+  list.append(card);
+ }
+}
+
+function printReport(row) {
+ const win = window.open('', '_blank');
+ if (!win) { status('Allow popups to print your report.'); return; }
+ win.document.title = 'DermaGuard report';
+ const style = node('style');
+ style.textContent = 'body{font:14px/1.5 system-ui;margin:32px;color:#0f172a}dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}dl div,header{border:1px solid #cbd5e1;border-radius:10px;padding:10px;background:#f8fafc}dt,figcaption{font-size:11px;color:#475569}dd{margin:2px 0 0}.observation-body{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0 0 8px;break-inside:avoid}img{width:100%;height:180px;object-fit:contain}p,dd{overflow-wrap:anywhere;white-space:pre-wrap}h3{margin:8px 0}';
+ win.document.head.append(style);
+ win.document.body.append(reportContent(row));
+ Promise.all(Array.from(win.document.images, image => image.decode().catch(() => undefined)))
+  .then(() => { win.focus(); win.print(); });
+}
 function renderHistory(){const history=$('scanHistoryList');history.replaceChildren();if(!state.scans.length)history.append(node('p','No saved scans yet.','text-sm text-slate-500'));state.scans.forEach(row=>{const button=node('button',undefined,'w-full text-left rounded-xl border border-slate-200 p-3 space-y-2');button.append(node('strong',new Date(row.created_at).toLocaleDateString()),photo(row.images[0],'w-full h-24 object-contain rounded-lg'),node('p',row.notes||'Skin observation','text-xs'));button.onclick=()=>{selectCase(row.case_id);switchTab('reports');renderReports();};history.append(button);});}
 function apply(data){state=data;const p=state.profile;const localMode=state.capabilities?.chat_mode==='local-records';if($('chatConsent'))$('chatConsent').parentElement.hidden=localMode;if($('trackingConsent'))$('trackingConsent').parentElement.hidden=localMode;if(localMode&&!lastQuestions.has('dashboardAiText')&&$('dashboardAiText'))$('dashboardAiText').textContent='Local record guide is ready. Ask about scans, saved dates, reports, nearby care or your profile. Generative AI is not connected yet.';setLanguage(p.language||'EN',false);selectedCase=selectedCase||state.cases[0]?.id||'';const values={Name:p.display_name,Email:p.email,Phone:p.phone,City:p.city,Street:p.street,Notes:p.notes,Lang:lang};Object.entries(values).forEach(([key,value])=>{const el=$('inputPatient'+key);if(el){el.value=value||'';if(key==='Email')el.readOnly=true;}});['sidebarPatientName','reportPatientName'].forEach(id=>{if($(id))$(id).textContent=p.display_name||'Your profile';});$('welcomePatientName').textContent=p.display_name?.trim().split(/\s+/)[0]||'there';$('sidebarPatientLocation').textContent=p.city||'Add your location';document.querySelectorAll('img[alt="Patient"],#sidebarAvatar,#profileAvatarPreview').forEach(img=>{img.src=p.avatar||'/images/dermaguard-logo.svg';});const select=$('caseSelect');select.replaceChildren(new Option('New skin observation',''),...state.cases.map(c=>new Option(c.title,c.id)));select.value=selectedCase;renderHistory();renderTracking();renderReports();renderScanResult();}
 let profileSaving=false;async function savePatientDetails(){if(profileSaving)return;profileSaving=true;try{status('Saving profile…');const input=id=>$(id).value.trim();const data=await rpc('profile',{name:input('inputPatientName'),city:input('inputPatientCity'),phone:input('inputPatientPhone'),street:input('inputPatientStreet'),notes:input('inputPatientNotes'),language:input('inputPatientLang'),avatar_path:state.profile.avatar_path,file:$('profileAvatarInput').files[0]});apply(data);profileDirty=false;$('profileAvatarInput').value='';status('Profile saved.');}catch(error){status(error.message);}finally{profileSaving=false;}}
@@ -251,14 +325,6 @@ async function saveScanToHistory() {
   status('Enter valid photo dates, not in the future.');
   return;
  }
- const current = $('scanDiameter');
- const previous = $('scanPreviousDiameter');
- if (!current.reportValidity() || !previous.reportValidity()) return;
- if (previous.value && !current.value) {
-  status('Enter a current diameter to compare measurements.');
-  current.focus();
-  return;
- }
  saving = true;
  $('saveScan').disabled = true;
  $('chooseScanPhotos').disabled = true;
@@ -272,8 +338,6 @@ async function saveScanToHistory() {
    title: $('caseTitle').value.trim(),
    notes: $('patientSymptomInput').value.trim(),
    request_id: requestId,
-   diameter_mm: current.value ? current.valueAsNumber : null,
-   previous_diameter_mm: previous.value ? previous.valueAsNumber : null,
   });
   const saved = data.scans.find(scan => scan.request_id === requestId);
   if (saved) {
@@ -284,7 +348,6 @@ async function saveScanToHistory() {
   clearPhotoSelection();
   $('patientSymptomInput').value = '';
   $('caseTitle').value = '';
-  current.value = previous.value = '';
   status('Observation saved.');
   const result = $('scanResult');
   if (saved && !$('view-scan').classList.contains('hidden')) result.focus();
@@ -362,20 +425,6 @@ document.addEventListener('DOMContentLoaded',async()=>{
  title.placeholder = 'Name for a new skin observation';
  title.setAttribute('aria-label', 'Observation name');
  title.maxLength = 120;
- const measurements = node('fieldset', undefined, 'grid gap-3 rounded-xl border border-slate-200 p-3 sm:grid-cols-2');
- measurements.append(node('legend', 'Measurements you entered (optional)', 'px-1 text-sm font-semibold'));
- for (const [id, text] of [['scanDiameter', 'Current diameter (mm)'], ['scanPreviousDiameter', 'Previous diameter (mm)']]) {
-  const label = node('label', text, 'space-y-1 text-sm');
-  const input = node('input', undefined, 'field w-full');
-  input.id = id;
-  input.type = 'number';
-  input.inputMode = 'decimal';
-  input.min = '0.001';
-  input.max = '1000';
-  input.step = 'any';
-  label.append(input);
-  measurements.append(label);
- }
  const dates = node('div', undefined, 'space-y-3');
  dates.id = 'photoDates';
  const confirm = node('label', ' These photos show the skin area I want to record.', 'text-sm');
@@ -383,13 +432,13 @@ document.addEventListener('DOMContentLoaded',async()=>{
  check.id = 'skinConsent';
  check.type = 'checkbox';
  confirm.prepend(check);
- const save = node('button', 'Save observation', 'button mt-4 w-full');
+ const save = node('button', 'Check photos and save', 'button mt-4 w-full');
  save.id = 'saveScan';
  save.onclick = saveScanToHistory;
  findings.replaceChildren(
   node('h3', 'Private skin record', 'text-xl font-bold'),
-  node('p', 'Choose 1–3 photos of the same area. Use a ruler if you want to record a diameter.', 'text-sm text-slate-600'),
-  select, title, notesCard, measurements, dates, confirm, save,
+  node('p', 'Choose 1–3 photos of the same area and describe what you observed.', 'text-sm text-slate-600'),
+  select, title, notesCard, dates, confirm, save,
  );
  $('scanFindingNote').role = 'status';
  clearPhotoSelection();
