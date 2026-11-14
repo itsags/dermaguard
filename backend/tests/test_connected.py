@@ -65,6 +65,21 @@ def test_pdf_valid_and_not_cached(login):
   r=client.get('/api/v1/scans/'+str(uuid4())+'/pdf')
   assert r.status_code==200 and r.content.startswith(b'%PDF')
   assert r.headers['cache-control']=='no-store'
+
+
+def test_scan_saves_only_user_entered_measurements(login):
+ case_id = str(uuid4())
+ payload = {'case_id': case_id, 'request_id': str(uuid4()), 'diameter_mm': 6.8,
+            'previous_diameter_mm': 6, 'images': [{'path': f'user-one/{case_id}/photo',
+                                                 'captured_at': '2026-11-01T00:00:00Z'}]}
+ with patch('app.connected.database', new=AsyncMock(side_effect=[[{'id': case_id}], [], [{'id': 'saved'}]])) as db, patch('app.connected.validate_stored_image', new=AsyncMock()):
+  assert client.post('/api/v1/scans', json=payload).status_code == 201
+  report = db.call_args.kwargs['payload']['report']
+  assert report['model_status'] == 'unavailable'
+  assert report['measurements'] == {'source': 'user_entered', 'diameter_mm': 6.8,
+                                    'previous_diameter_mm': 6, 'change_mm': 0.8}
+ with patch('app.connected.database', new=AsyncMock(side_effect=[[{'id': case_id}], []])):
+  assert client.post('/api/v1/scans', json={**payload, 'diameter_mm': None}).status_code == 422
 def test_chat_consent_required(login):
  with patch('app.connected.settings.groq_api_key','test'):
   assert client.post('/api/v1/chat',json={'message':'Hello'}).status_code==422
