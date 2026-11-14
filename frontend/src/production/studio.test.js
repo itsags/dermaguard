@@ -46,7 +46,7 @@ it('shows the newly saved observation in Scan Studio and opens its report',async
  Object.defineProperty(input,'files',{value:[new win.File(['photo'],'sample.jpg',{type:'image/jpeg'})]});
  input.dispatchEvent(new win.Event('change'));
  await new Promise(resolve=>setTimeout(resolve,0));
- doc.querySelector('#skinConsent').checked=true;
+ expect(doc.querySelector('#skinConsent')).toBeNull();
  expect(doc.querySelector('#scanDiameter')).toBeNull();
  expect(doc.querySelector('#scanPreviousDiameter')).toBeNull();
  doc.querySelector('#saveScan').click();
@@ -152,8 +152,22 @@ it('places the home reply before the input panel',async()=>{
  const reply=doc.querySelector('#dashboardReply'),composer=doc.querySelector('#chatComposer');
  expect(reply.nextElementSibling).toBe(composer);
  expect(reply.contains(doc.querySelector('#dashboardAiText'))).toBe(true);
- expect(composer.contains(doc.querySelector('#chatConsent'))).toBe(true);
+ expect(composer.querySelector('#chatConsent')).toBeNull();
+ expect(composer.textContent).toContain('AI provider');
  dom.window.close();
+});
+
+it('answers a profile-name question in the selected language without calling the provider',async()=>{
+ const requests=[];
+ const dom=await boot(base,message=>requests.push(message));
+ const win=dom.window;
+ const reply=win.document.querySelector('#dashboardAiText');
+ win.setLanguage('TA',false);
+ await win.ask('What’s my name?','dashboardAiText');
+ expect(reply.textContent).toContain('உங்கள் பதிவில் உள்ள பெயர் Test Person');
+ expect(reply.lang).toBe('ta');
+ expect(requests.some(message=>message.action==='chat')).toBe(false);
+ win.close();
 });
 
 it('changes active language and regenerates an existing reply in the selected language',async()=>{

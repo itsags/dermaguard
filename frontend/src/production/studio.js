@@ -44,25 +44,67 @@ function setLanguage(value,refresh=true){
  if(refresh)lastQuestions.forEach((message,target)=>void ask(message,target));
 }
 
-function stopSpeech(){if(typeof speechSynthesis!=='undefined')speechSynthesis.cancel();}
-function speakText(text){
- if(typeof speechSynthesis==='undefined'){status('Read-aloud is unavailable on this device.');return;}
- stopSpeech();const utterance=new SpeechSynthesisUtterance(text);const voices=speechSynthesis.getVoices();
- const voice=voices.find(v=>v.lang.toLowerCase().startsWith(lang==='TA'?'ta':'en'));
- if(lang==='TA'&&!voice){status('A Tamil voice is not installed on this device. The Tamil text reply is available.');return;}
- utterance.lang=lang==='TA'?'ta-IN':lang==='TG'?'en-IN':'en-US';if(voice)utterance.voice=voice;speechSynthesis.speak(utterance);
+let activeSpeech;
+function stopSpeech(){
+ if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+ activeSpeech = undefined;
 }
-function consent(target){return $(target==='progAiResponse'?'trackingConsent':'chatConsent').checked;}
+function speakText(text, replyLanguage = lang){
+ if (!text?.trim()) return;
+ if (typeof speechSynthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') {
+  status('Read-aloud is unavailable in this browser.');
+  return;
+ }
+ stopSpeech();
+ const utterance = new SpeechSynthesisUtterance(text);
+ utterance.lang = replyLanguage === 'TA' || replyLanguage === 'ta' ? 'ta-IN' :
+  replyLanguage === 'TG' || replyLanguage === 'ta-Latn' ? 'en-IN' : 'en-US';
+ const voices = speechSynthesis.getVoices();
+ const voice = voices.find(item => item.lang.toLowerCase() === utterance.lang.toLowerCase()) ||
+  voices.find(item => item.lang.toLowerCase().startsWith(utterance.lang.slice(0,2)));
+ if (voice) utterance.voice = voice;
+ if (utterance.lang === 'ta-IN' && voices.length && !voice) {
+  status('Install a Tamil text-to-speech voice in your device settings, then try Listen again.');
+  return;
+ }
+ activeSpeech = utterance;
+ utterance.onend = () => { if (activeSpeech === utterance) activeSpeech = undefined; };
+ utterance.onerror = event => {
+  if (activeSpeech !== utterance) return;
+  activeSpeech = undefined;
+  if (event.error === 'interrupted' || event.error === 'canceled') return;
+  status(utterance.lang === 'ta-IN'
+   ? 'Tamil playback could not start. Check the Tamil text-to-speech voice in your device settings.'
+   : 'Playback could not start. Try Listen again.');
+ };
+ speechSynthesis.speak(utterance);
+}
+
+function profileNameReply(question, language) {
+ const normalized = question.toLowerCase().replace(/[’']/g, '').replace(/[?!.,]/g, '').trim();
+ if (!/^(what(?: is|s) my (?:full )?name|(?:can you )?tell me my name|do you know my name|who am i|en peru enna|enna peru|என் பெயர் என்ன|என்னோட பேர் என்ன)$/.test(normalized)) return null;
+ const name = state.profile.display_name?.trim();
+ const replies = {
+  EN: name ? 'Your saved name is ' + name + '.' : 'Add your name in Patient Details, then save it.',
+  TA: name ? 'உங்கள் பதிவில் உள்ள பெயர் ' + name + '.' : 'Patient Details பகுதியில் உங்கள் பெயரைச் சேமிக்கவும்.',
+  TG: name ? 'Unga saved name ' + name + '.' : 'Patient Details-la unga pera save pannunga.',
+ };
+ return replies[language];
+}
 async function ask(message,target){
  if(!message.trim())return;
  lastQuestions.set(target,message);const requestId=makeId(),requestLanguage=lang;chatRequests.set(target,requestId);
- const output=$(target);if(state.capabilities?.chat===false){output.textContent='AI chat is not connected yet.';return;}output.scrollIntoView?.({block:'nearest',behavior:'smooth'});
+ const output=$(target);
+ output.lang=requestLanguage==='TA'?'ta':requestLanguage==='TG'?'ta-Latn':'en';
+ const profileReply=profileNameReply(message,requestLanguage);
+ if(profileReply){output.textContent=profileReply;return;}
+ if(state.capabilities?.chat===false){output.textContent='AI chat is not connected yet.';return;}output.scrollIntoView?.({block:'nearest',behavior:'smooth'});
  const waiting={EN:'Thinking…',TA:'பதில் தயாராகிறது…',TG:'Bathil thayaar aagudhu…'};output.textContent=waiting[requestLanguage];
  try{
   const response=await rpc('chat',{
    message, language:requestLanguage,
    case_id:target==='progAiResponse' ? selectedCase||null : null,
-   consent:consent(target),
+   consent:true,
   });
   if(chatRequests.get(target)!==requestId||lang!==requestLanguage)return;
   output.lang=requestLanguage==='TA'?'ta':requestLanguage==='TG'?'ta-Latn':'en';
@@ -134,8 +176,8 @@ function observationBody(row) {
  const details = node('div', undefined, 'space-y-3 min-w-0');
  const summary = node('header', undefined, 'rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-1');
  summary.append(node('p', 'Observation result', 'text-xs uppercase font-bold text-slate-600'),
-  node('h3', 'Clinical analysis unavailable', 'text-lg font-bold'),
-  node('p', 'The checks below describe the uploaded files. Lesion diameter and change are unavailable from these photos.', 'text-sm text-slate-600'));
+  node('h3', 'Saved skin observation', 'text-lg font-bold'),
+  node('p', 'Includes your photos, dates, notes and file checks. Clinical findings require a clinician’s assessment.', 'text-sm text-slate-600'));
  const checks = photoCheckDetails(row);
  details.append(summary);
  if (checks.length) details.append(reportDetails(checks));
@@ -236,34 +278,21 @@ function renderReports() {
   const actions = node('div', undefined, 'flex flex-wrap gap-2');
   const download = node('button', 'Download PDF', 'button');
   download.onclick = () => rpc('pdf', {id: row.id, progression: $('reportProgression').checked}).catch(error => status(error.message));
-  const print = node('button', 'Print / Save PDF', 'button');
-  print.onclick = () => printReport(row);
   const deleting = deletingScans.has(row.id);
   const remove = node('button', deleting ? 'Deleting…' : 'Delete scan', 'button border border-red-200 bg-white text-red-700');
   remove.onclick = () => void deleteSavedScan(row);
-  download.disabled = print.disabled = remove.disabled = deleting;
-  actions.append(download, print, remove);
+  download.disabled = remove.disabled = deleting;
+  actions.append(download, remove);
   card.append(reportContent(row), actions);
   list.append(card);
  }
 }
 
-function printReport(row) {
- const win = window.open('', '_blank');
- if (!win) { status('Allow popups to print your report.'); return; }
- win.document.title = 'DermaGuard report';
- const style = node('style');
- style.textContent = 'body{font:14px/1.5 system-ui;margin:32px;color:#0f172a}dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}dl div,header{border:1px solid #cbd5e1;border-radius:10px;padding:10px;background:#f8fafc}dt,figcaption{font-size:11px;color:#475569}dd{margin:2px 0 0}.observation-body{display:grid;grid-template-columns:1fr 1fr;gap:16px}figure{margin:0 0 8px;break-inside:avoid}img{width:100%;height:180px;object-fit:contain}p,dd{overflow-wrap:anywhere;white-space:pre-wrap}h3{margin:8px 0}';
- win.document.head.append(style);
- win.document.body.append(reportContent(row));
- Promise.all(Array.from(win.document.images, image => image.decode().catch(() => undefined)))
-  .then(() => { win.focus(); win.print(); });
-}
 function renderHistory(){const history=$('scanHistoryList');history.replaceChildren();if(!state.scans.length)history.append(node('p','No saved scans yet.','text-sm text-slate-500'));state.scans.forEach(row=>{const button=node('button',undefined,'w-full text-left rounded-xl border border-slate-200 p-3 space-y-2');button.append(node('strong',new Date(row.created_at).toLocaleDateString()),photo(row.images[0],'w-full h-24 object-contain rounded-lg'),node('p',row.notes||'Skin observation','text-xs'));button.onclick=()=>{selectCase(row.case_id);switchTab('reports');renderReports();};history.append(button);});}
-function apply(data){state=data;const p=state.profile;const localMode=state.capabilities?.chat_mode==='local-records';if($('chatConsent'))$('chatConsent').parentElement.hidden=localMode;if($('trackingConsent'))$('trackingConsent').parentElement.hidden=localMode;if(localMode&&!lastQuestions.has('dashboardAiText')&&$('dashboardAiText'))$('dashboardAiText').textContent='Local record guide is ready. Ask about scans, saved dates, reports, nearby care or your profile. Generative AI is not connected yet.';setLanguage(p.language||'EN',false);selectedCase=selectedCase||state.cases[0]?.id||'';const values={Name:p.display_name,Email:p.email,Phone:p.phone,City:p.city,Street:p.street,Notes:p.notes,Lang:lang};Object.entries(values).forEach(([key,value])=>{const el=$('inputPatient'+key);if(el){el.value=value||'';if(key==='Email')el.readOnly=true;}});['sidebarPatientName','reportPatientName'].forEach(id=>{if($(id))$(id).textContent=p.display_name||'Your profile';});$('welcomePatientName').textContent=p.display_name?.trim().split(/\s+/)[0]||'there';$('sidebarPatientLocation').textContent=p.city||'Add your location';document.querySelectorAll('img[alt="Patient"],#sidebarAvatar,#profileAvatarPreview').forEach(img=>{img.src=p.avatar||'/images/dermaguard-logo.svg';});const select=$('caseSelect');select.replaceChildren(new Option('New skin observation',''),...state.cases.map(c=>new Option(c.title,c.id)));select.value=selectedCase;renderHistory();renderTracking();renderReports();renderScanResult();const tracking=$('trackingCase');if(tracking){tracking.replaceChildren(new Option('Choose an observation',''),...state.cases.map(item=>new Option(item.title,item.id)));tracking.value=selectedCase;}if(!$('view-clinics').classList.contains('hidden'))void loadClinics();}
+function apply(data){state=data;const p=state.profile;const localMode=state.capabilities?.chat_mode==='local-records';if(localMode&&!lastQuestions.has('dashboardAiText')&&$('dashboardAiText'))$('dashboardAiText').textContent='Local record guide is ready. Ask about scans, saved dates, reports, nearby care or your profile. Generative AI is not connected yet.';setLanguage(p.language||'EN',false);selectedCase=selectedCase||state.cases[0]?.id||'';const values={Name:p.display_name,Email:p.email,Phone:p.phone,City:p.city,Street:p.street,Notes:p.notes,Lang:lang};Object.entries(values).forEach(([key,value])=>{const el=$('inputPatient'+key);if(el){el.value=value||'';if(key==='Email')el.readOnly=true;}});['sidebarPatientName','reportPatientName'].forEach(id=>{if($(id))$(id).textContent=p.display_name||'Your profile';});$('welcomePatientName').textContent=p.display_name?.trim().split(/\s+/)[0]||'there';$('sidebarPatientLocation').textContent=p.city||'Add your location';document.querySelectorAll('img[alt="Patient"],#sidebarAvatar,#profileAvatarPreview').forEach(img=>{img.src=p.avatar||'/images/dermaguard-logo.svg';});const select=$('caseSelect');select.replaceChildren(new Option('New skin observation',''),...state.cases.map(c=>new Option(c.title,c.id)));select.value=selectedCase;renderHistory();renderTracking();renderReports();renderScanResult();const tracking=$('trackingCase');if(tracking){tracking.replaceChildren(new Option('Choose an observation',''),...state.cases.map(item=>new Option(item.title,item.id)));tracking.value=selectedCase;}if(!$('view-clinics').classList.contains('hidden'))void loadClinics();}
 let profileSaving=false;async function savePatientDetails(){if(profileSaving)return;profileSaving=true;try{status('Saving profile…');const input=id=>$(id).value.trim();const data=await rpc('profile',{name:input('inputPatientName'),city:input('inputPatientCity'),phone:input('inputPatientPhone'),street:input('inputPatientStreet'),notes:input('inputPatientNotes'),language:input('inputPatientLang'),avatar_path:state.profile.avatar_path,file:$('profileAvatarInput').files[0]});apply(data);profileDirty=false;$('profileAvatarInput').value='';status('Profile saved.');}catch(error){status(error.message);}finally{profileSaving=false;}}
 let photoCheckRevision = 0;
-function clearPhotoSelection(message = 'Choose photos to preview and check them.') {
+function clearPhotoSelection(message = 'Upload photos to preview and check them.') {
  photoCheckRevision++;
  urls.forEach(url => URL.revokeObjectURL(url));
  urls = [];
@@ -277,7 +306,6 @@ function clearPhotoSelection(message = 'Choose photos to preview and check them.
  $('scanSourceLabel').textContent = 'Waiting for image';
  $('scanFindingNote').textContent = message;
  $('photoDates').replaceChildren();
- $('skinConsent').checked = false;
  $('saveScan').disabled = true;
 }
 
@@ -366,7 +394,6 @@ async function handleImageUpload(event) {
 async function saveScanToHistory() {
  if (saving) return;
  if (!files.length) { status('Choose at least one skin photo.'); return; }
- if (!$('skinConsent').checked) { status('Confirm these photos show the skin area you want to record.'); return; }
  const dates = Array.from(document.querySelectorAll('[data-photo-date]')).map(input => new Date(input.value));
  if (dates.some(date => !Number.isFinite(date.getTime()) || date > Date.now())) {
   status('Enter valid photo dates, not in the future.');
@@ -470,7 +497,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
  fileInput.removeAttribute('onchange');
  fileInput.addEventListener('change', handleImageUpload);
  const oldPicker = fileInput.closest('label');
- const picker = node('button', 'Choose photos', oldPicker.className);
+ const picker = node('button', 'Upload', oldPicker.className);
  picker.id = 'chooseScanPhotos';
  picker.type = 'button';
  picker.onclick = () => fileInput.click();
@@ -494,18 +521,13 @@ document.addEventListener('DOMContentLoaded',async()=>{
  title.maxLength = 120;
  const dates = node('div', undefined, 'space-y-3');
  dates.id = 'photoDates';
- const confirm = node('label', ' These photos show the skin area I want to record.', 'text-sm');
- const check = node('input');
- check.id = 'skinConsent';
- check.type = 'checkbox';
- confirm.prepend(check);
  const save = node('button', 'Check photos and save', 'button mt-4 w-full');
  save.id = 'saveScan';
  save.onclick = saveScanToHistory;
  findings.replaceChildren(
   node('h3', 'Private skin record', 'text-xl font-bold'),
   node('p', 'Choose 1–3 photos of the same area and describe what you observed.', 'text-sm text-slate-600'),
-  select, title, notesCard, dates, confirm, save,
+  select, title, notesCard, dates, save,
  );
  $('scanFindingNote').role = 'status';
  clearPhotoSelection();
@@ -532,13 +554,30 @@ document.addEventListener('DOMContentLoaded',async()=>{
   button.onclick=()=>askProgressionQuestion(progressQuestions[index]);
  });
  document.querySelectorAll('.tracking-card').forEach(card=>{card.onclick=()=>document.querySelectorAll('.tracking-card').forEach(c=>c.setAttribute('aria-pressed',String(c===card)));});
- const trackingConsent=node('label',' Allow selected-case notes to be sent to the AI provider for replies.','block text-xs text-slate-600');const consentCopy=node('input');consentCopy.type='checkbox';consentCopy.id='trackingConsent';trackingConsent.prepend(consentCopy);$('progAiResponse').parentElement.before(trackingConsent);
+ const trackingReply=$('progAiResponse');
+ const trackingNotice=node('p','Ask AI may send your question and the selected observation’s notes to the AI provider.','text-xs text-slate-600');
+ trackingReply.parentElement.before(trackingNotice);
+ const trackingListen=progression.querySelector('button[onclick^="speakText("]');
+ if(trackingListen){
+  trackingListen.removeAttribute('onclick');
+  trackingListen.onclick=()=>speakText(trackingReply.textContent,trackingReply.lang||lang);
+ }
  const reports=$('view-reports');reports.replaceChildren(node('h2','Health Reports','text-2xl font-bold'));const filter=node('input',undefined,'field');filter.type='date';filter.id='reportFrom';filter.setAttribute('aria-label','Reports from date');filter.onchange=renderReports;const toggle=node('input');toggle.type='checkbox';toggle.id='reportProgression';toggle.onchange=renderReports;const label=node('label','Include selected-case progression dates','text-sm');label.prepend(toggle);const reportList=node('div',undefined,'space-y-4');reportList.id='reportList';reports.append(filter,label,reportList);
  const clinics=$('view-clinics');clinics.replaceChildren(node('h2','Nearby dermatologists & hospitals','text-2xl font-bold'));const care=node('iframe',undefined,'w-full h-80 border-0 rounded-xl');care.title='Nearby dermatology map';care.id='careMap';care.loading='lazy';const fallback=node('a','Open in Google Maps','underline text-sm');fallback.id='careFallback';fallback.target='_blank';fallback.rel='noopener noreferrer';const clinicList=node('div',undefined,'grid md:grid-cols-2 gap-4');clinicList.id='clinicList';clinics.append(care,fallback,clinicList);
  $('dashboardAiCard')?.remove();
  const composer=$('promptInput').parentElement.parentElement;composer.id='chatComposer';
  const shortcuts=$('view-dashboard').querySelector(':scope > .grid');if(shortcuts)shortcuts.id='dashboardShortcuts';
- const chat=node('div',undefined,'space-y-3 mt-4');const consentLabel=node('label','Allow my question to be sent to the AI provider for this reply.','text-xs text-slate-600');const consentInput=node('input');consentInput.type='checkbox';consentInput.id='chatConsent';consentLabel.prepend(consentInput);const output=node('p','Ask a question about your records or using DermaGuard.','text-sm leading-7');output.id='dashboardAiText';output.role='status';const listen=node('button','Listen to reply','button');listen.onclick=()=>speakText(output.textContent);chat.id='dashboardReply';chat.className='w-full max-w-[740px] mx-auto rounded-2xl border border-slate-200 bg-white p-4 space-y-3';chat.append(output,listen);composer.before(chat);composer.append(consentLabel);
+ const chat=node('div',undefined,'space-y-3 mt-4');
+ const output=node('p','Ask a question about your records or using DermaGuard.','text-sm leading-7');
+ output.id='dashboardAiText';
+ output.role='status';
+ const listen=node('button','Listen to reply','button');
+ listen.onclick=()=>speakText(output.textContent,output.lang||lang);
+ chat.id='dashboardReply';
+ chat.className='w-full max-w-[740px] mx-auto rounded-2xl border border-slate-200 bg-white p-4 space-y-3';
+ chat.append(output,listen);
+ composer.before(chat);
+ composer.append(node('p','Ask AI may send your question to the AI provider. Profile-name lookups stay in DermaGuard.','text-xs text-slate-600'));
  const presets=Array.from(document.querySelectorAll('#view-dashboard button[onclick^="runDashboardPrompt("]'));const questions=['How do I keep a skin observation record?','What changes should I discuss with a dermatologist?','Compare the dates and notes in my case.'];presets.filter(b=>b.textContent.trim()).slice(0,3).forEach((button,i)=>{button.textContent=questions[i];button.onclick=()=>runDashboardPrompt(questions[i]);});$('promptInput').placeholder='Ask about skin records, tracking, reports or nearby care…';$('promptInput').onkeydown=e=>{if(e.key==='Enter')runDashboardPrompt();};
  document.querySelectorAll('button[onclick*="dermaguard:logout"]').forEach(button=>button.onclick=()=>rpc('logout').catch(e=>status(e.message)));
  $('profileAvatarInput').onchange=event=>{const file=event.target.files[0];if(file){const url=URL.createObjectURL(file);$('profileAvatarPreview').src=url;$('profileAvatarPreview').onload=()=>URL.revokeObjectURL(url);}};
