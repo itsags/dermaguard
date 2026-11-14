@@ -72,7 +72,7 @@ def test_create_checks_photos_and_records_unavailable_model(login):
     'very_dark_pct': 0, 'very_bright_pct': 0}]
 def test_pdf_valid_and_not_cached(login):
  row={'created_at':'2026-11-09','notes':'Observed change','images':[],'report':{'summary':'Recorded','notice':'Not a diagnosis'}}
- with patch('app.connected.database',new=AsyncMock(return_value=[row])):
+ with patch('app.connected.database',new=AsyncMock(side_effect=[[row], []])):
   r=client.get('/api/v1/scans/'+str(uuid4())+'/pdf')
   assert r.status_code==200 and r.content.startswith(b'%PDF')
   assert r.headers['cache-control']=='no-store'
@@ -108,7 +108,8 @@ def test_report_embeds_saved_image(login):
  from PIL import Image
  image=BytesIO();Image.new('RGB',(200,200),'pink').save(image,format='JPEG')
  row={'case_id':str(uuid4()),'created_at':'2026-11-09','notes':'Observed change','images':[{'path':'user-one/case/a','captured_at':'2026-11-09T10:00:00Z'}],'report':{'summary':'Recorded','notice':'Not a diagnosis'}}
- with patch('app.connected.database',new=AsyncMock(return_value=[row])),patch('app.connected.validate_stored_image',new=AsyncMock(return_value=image.getvalue())):
+ records = [[row], [{'display_name': 'Test Person'}], [{'title': 'Observation', 'body_area': 'Left arm'}]]
+ with patch('app.connected.database',new=AsyncMock(side_effect=records)),patch('app.connected.validate_stored_image',new=AsyncMock(return_value=image.getvalue())):
   r=client.get('/api/v1/scans/'+str(uuid4())+'/pdf')
   assert r.status_code==200 and b'/Subtype /Image' in r.content
 

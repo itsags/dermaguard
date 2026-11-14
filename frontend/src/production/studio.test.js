@@ -163,7 +163,7 @@ it('answers a profile-name question in the selected language without calling the
  const win=dom.window;
  const reply=win.document.querySelector('#dashboardAiText');
  win.setLanguage('TA',false);
- await win.ask('What’s my name?','dashboardAiText');
+ await win.ask('hi what was my name','dashboardAiText');
  expect(reply.textContent).toContain('உங்கள் பதிவில் உள்ள பெயர் Test Person');
  expect(reply.lang).toBe('ta');
  expect(requests.some(message=>message.action==='chat')).toBe(false);

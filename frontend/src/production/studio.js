@@ -2,8 +2,8 @@ function makeId(){if(crypto.randomUUID)return crypto.randomUUID();const a=crypto
 /* Production UI adapter. No demo scripts or synthetic clinical findings are executed. */
 const APP_ORIGIN = __DERMAGUARD_APP_ORIGIN__;
 const pending=new Map();
-function rpc(action,payload={}){return new Promise((resolve,reject)=>{const id=makeId();const timeout=setTimeout(()=>{pending.delete(id);reject(Error('Request timed out. Refresh before retrying a save.'));},65000);pending.set(id,{resolve,reject,timeout});parent.postMessage({rpc:true,id,action,payload},APP_ORIGIN);});}
-addEventListener('message',event=>{if(event.source!==parent||event.origin!==APP_ORIGIN||!event.data?.rpcResult)return;const entry=pending.get(event.data.id);if(!entry)return;clearTimeout(entry.timeout);pending.delete(event.data.id);event.data.error?entry.reject(Error(event.data.error)):entry.resolve(event.data.result);});
+function rpc(action,payload={},onProgress){return new Promise((resolve,reject)=>{const id=makeId();const timeout=setTimeout(()=>{pending.delete(id);reject(Error('Request timed out. Refresh before retrying a save.'));},65000);pending.set(id,{resolve,reject,timeout,onProgress});parent.postMessage({rpc:true,id,action,payload},APP_ORIGIN);});}
+addEventListener('message',event=>{if(event.source!==parent||event.origin!==APP_ORIGIN)return;const entry=pending.get(event.data?.id);if(!entry)return;if(event.data.rpcProgress){entry.onProgress?.(event.data);return;}if(!event.data.rpcResult)return;clearTimeout(entry.timeout);pending.delete(event.data.id);event.data.error?entry.reject(Error(event.data.error)):entry.resolve(event.data.result);});
 let state={profile:{},cases:[],scans:[]},lang='EN',selectedCase='',files=[],urls=[],saving=false,scanRequestId=makeId();
 const $=id=>document.getElementById(id);
 function node(tag,text,cls=''){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;n.className=cls;return n;}
@@ -81,8 +81,8 @@ function speakText(text, replyLanguage = lang){
 }
 
 function profileNameReply(question, language) {
- const normalized = question.toLowerCase().replace(/[’']/g, '').replace(/[?!.,]/g, '').trim();
- if (!/^(what(?: is|s) my (?:full )?name|(?:can you )?tell me my name|do you know my name|who am i|en peru enna|enna peru|என் பெயர் என்ன|என்னோட பேர் என்ன)$/.test(normalized)) return null;
+ const normalized = question.toLowerCase().replace(/[’']/g, '').replace(/[?!.,]/g, ' ').trim().replace(/^(hi|hello|hey)\s+/, '').replace(/\s+/g, ' ');
+ if (!/^(what(?: is| was|s) my (?:full )?name|(?:can you )?tell me my name|do you know my name|who am i|en peru enna|enna peru|என் பெயர் என்ன|என்னோட பேர் என்ன)$/.test(normalized)) return null;
  const name = state.profile.display_name?.trim();
  const replies = {
   EN: name ? 'Your saved name is ' + name + '.' : 'Add your name in Patient Details, then save it.',
@@ -177,7 +177,7 @@ function observationBody(row) {
  const summary = node('header', undefined, 'rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-1');
  summary.append(node('p', 'Observation result', 'text-xs uppercase font-bold text-slate-600'),
   node('h3', 'Saved skin observation', 'text-lg font-bold'),
-  node('p', 'Includes your photos, dates, notes and file checks. Clinical findings require a clinician’s assessment.', 'text-sm text-slate-600'));
+  node('p', 'Photo review', 'text-sm text-slate-600'));
  const checks = photoCheckDetails(row);
  details.append(summary);
  if (checks.length) details.append(reportDetails(checks));
@@ -412,6 +412,10 @@ async function saveScanToHistory() {
    title: $('caseTitle').value.trim(),
    notes: $('patientSymptomInput').value.trim(),
    request_id: requestId,
+  }, update => {
+   $('scanFindingNote').textContent = update.value == null
+    ? update.label + '…'
+    : update.label + ' · ' + update.value + '% of photos uploaded';
   });
   const saved = data.scans.find(scan => scan.request_id === requestId);
   if (saved) {

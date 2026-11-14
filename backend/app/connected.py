@@ -182,48 +182,39 @@ async def delete_scan(scan_id: UUID, user_id: str = Depends(current_user_id)):
 
 @router.get('/scans/{scan_id}/pdf')
 async def pdf(scan_id:UUID,progression:bool=False,user_id:str=Depends(current_user_id)):
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as PDFImage, KeepTogether
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib import colors
-    from reportlab.lib.utils import ImageReader
-    from xml.sax.saxutils import escape
-    row=await scan(scan_id,user_id)
-    output=BytesIO();styles=getSampleStyleSheet();story=[]
-    def text(value,style='BodyText'):
-        story.append(Paragraph(escape(str(value)),styles[style]));story.append(Spacer(1,10))
-    text('DermaGuard','Title');text('Private skin observation report','Heading2')
-    text('Record: '+str(scan_id));text('Created: '+row['created_at'])
-    if row['notes'].strip():
-        text('Your observations','Heading2')
-        text(row['notes'])
-    text('Analysis status','Heading2');text(row['report'].get('summary','No clinical analysis available.'));text(row['report'].get('notice','This is not a diagnosis.'))
-    measurements = measurement_lines(row['report'])
-    if measurements:
-        text('Measurements entered by user', 'Heading2')
-        for line in measurements:
-            text(line)
-    if row['report'].get('photo_checks'):
-        text('Uploaded photo checks', 'Heading2')
-        for index, check in enumerate(row['report']['photo_checks'], 1):
-            text(f"Photo {index}: {check['format']} | {check['width_px']} x {check['height_px']} pixels | {check['bytes']:,} bytes")
-            if 'very_dark_pct' in check:
-                text(f"Photo lighting: {check['very_dark_pct']}% very dark pixels, {check['very_bright_pct']}% very bright pixels")
-    records=[row]
-    if progression:
-        records=await database('GET','scan_records',user_id,f"?user_id=eq.{user_id}&case_id=eq.{row['case_id']}&order=created_at.desc&limit=3")
-    photos=sorted([(image,record['notes']) for record in records for image in record['images']],key=lambda item:item[0]['captured_at'])[-3:]
-    text('Saved photos and capture dates','Heading2')
-    for image,notes in photos:
+    from .observation_pdf import build_observation_pdf
+
+    row = await scan(scan_id, user_id)
+    case_id = row.get('case_id')
+    profiles = await database('GET', 'patient_profiles', user_id,
+                              f'?user_id=eq.{user_id}&select=display_name&limit=1')
+    cases = []
+    if case_id:
+        cases = await database('GET', 'skin_cases', user_id,
+                               f'?id=eq.{case_id}&user_id=eq.{user_id}&select=title,body_area&limit=1')
+    records = [row]
+    if progression and case_id:
+        records = await database('GET', 'scan_records', user_id,
+                                 f'?user_id=eq.{user_id}&case_id=eq.{case_id}&order=created_at.desc&limit=3')
+    photos = sorted(
+        [(image, record) for record in records for image in record['images']],
+        key=lambda item: item[0]['captured_at'],
+    )[-3:]
+    rendered = []
+    for image, record in photos:
         try:
-            content=await validate_stored_image(image['path'],user_id,row['case_id'])
-            reader=ImageReader(BytesIO(content));width,height=reader.getSize();scale=min(460/width,280/height)
-            story.append(KeepTogether([Paragraph(escape('Captured: '+image['captured_at']),styles['Heading3']),PDFImage(BytesIO(content),width=width*scale,height=height*scale),Spacer(1,12)]))
-            if progression and notes.strip():
-                text(notes)
-        except HTTPException:text('Photo could not be retrieved. View this photo in your private account.')
-    text('No cancer diagnosis, risk score, or measured progression is inferred from these photos.')
-    SimpleDocTemplate(output,title='DermaGuard observation report',author='DermaGuard',leftMargin=50,rightMargin=50,topMargin=40,bottomMargin=40).build(story)
-    return Response(output.getvalue(),media_type='application/pdf',headers={'Content-Disposition':f'attachment; filename="dermaguard-{scan_id}.pdf"','Cache-Control':'no-store'})
+            content = await validate_stored_image(image['path'], user_id, case_id)
+        except HTTPException:
+            content = None
+        checks = record['report'].get('photo_checks') or []
+        index = record['images'].index(image)
+        rendered.append((image['captured_at'], content, checks[index] if index < len(checks) else None))
+    dates = [image['captured_at'] for image, _ in photos] if progression else []
+    output = build_observation_pdf(str(scan_id), row, profiles[0] if profiles else {},
+                                   cases[0] if cases else {}, rendered, measurement_lines(row['report']), dates)
+    return Response(output, media_type='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="dermaguard-{scan_id}.pdf"', 'Cache-Control': 'no-store',
+    })
 
 
 class ChatRequest(BaseModel):
