@@ -75,6 +75,55 @@ function selectCase(id){selectedCase=id;renderTracking();renderReports();}
 function photo(image,cls='w-full h-full object-contain'){const img=node('img',undefined,cls);img.src=image.url;img.alt='Private skin observation';return img;}
 function allPhotos(){return state.scans.filter(row=>!selectedCase||row.case_id===selectedCase).flatMap(row=>row.images.map(image=>({...image,notes:row.notes,report:row.report}))).sort((a,b)=>new Date(a.captured_at)-new Date(b.captured_at)).slice(-3);}
 function renderTracking(){const images=allPhotos();document.querySelectorAll('.tracking-image').forEach((slot,index)=>{slot.replaceChildren();if(images[index])slot.append(photo(images[index]));else slot.textContent='Waiting for image';const card=slot.closest('.tracking-card');if(card){const label=Array.from(card.children).find(el=>el!==slot&&['Waiting for image','Photo saved'].includes(el.textContent.trim()));if(label)label.textContent=images[index]?'Photo saved':'Waiting for image';card.querySelector('[data-date]')?.remove();const date=node('p',images[index]?new Date(images[index].captured_at).toLocaleString():'No photo saved','text-xs text-slate-500');date.dataset.date='true';card.append(date);}});const elapsed=$('elapsedTime');if(elapsed)elapsed.textContent=images.length>1?Math.round((new Date(images.at(-1).captured_at)-new Date(images[0].captured_at))/86400000)+' days between first and latest photo':'Add dated photos of the same area to compare.';}
+let savedResultId;
+
+function renderScanResult() {
+ const result = $('scanResult');
+ if (!result) return;
+ const row = savedResultId ? state.scans.find(scan => scan.id === savedResultId) : state.scans[0];
+ result.hidden = !row;
+ result.replaceChildren();
+ if (!row) return;
+
+ const title = state.cases.find(item => item.id === row.case_id)?.title || 'Skin observation';
+ const summary = node('header', undefined, 'rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-1');
+ summary.append(
+  node('p', 'Observation saved', 'text-xs font-bold uppercase tracking-wide text-emerald-800'),
+  node('h3', title, 'text-lg font-bold'),
+  node('p', 'Clinical image analysis unavailable', 'text-sm text-slate-600'),
+ );
+ const details = node('dl', undefined, 'grid grid-cols-1 gap-3 sm:grid-cols-2');
+ for (const [label, value] of [
+  ['Saved on', new Date(row.created_at).toLocaleString()],
+  ['Photos saved', String(row.images.length)],
+  ['Capture dates', row.images.map(image => new Date(image.captured_at).toLocaleString()).join(' · ')],
+  ['Your notes', row.notes || 'No notes added'],
+ ]) {
+  const detail = node('div', undefined, 'min-w-0 rounded-xl border border-slate-200 bg-white p-3');
+  detail.append(node('dt', label, 'text-xs font-semibold text-slate-600'), node('dd', value, 'mt-1 break-words text-sm'));
+  details.append(detail);
+ }
+ const gallery = node('div', undefined, 'grid content-start gap-3');
+ row.images.forEach(image => gallery.append(photo(image, 'h-48 w-full rounded-xl bg-slate-50 object-contain')));
+ const information = node('div', undefined, 'min-w-0 space-y-3');
+ const actions = node('div', undefined, 'flex flex-wrap gap-2');
+ const view = node('button', 'View report', 'button');
+ view.onclick = () => {
+  $('reportFrom').value = '';
+  selectCase(row.case_id);
+  switchTab('reports');
+  const report = Array.from($('reportList').children).find(card => card.dataset.scanId === row.id);
+  report?.focus();
+ };
+ const download = node('button', 'Download PDF', 'button');
+ download.onclick = () => rpc('pdf', {id: row.id}).catch(error => status(error.message));
+ actions.append(view, download);
+ information.append(summary, details, actions);
+ const layout = node('div', undefined, 'grid gap-5 md:grid-cols-2');
+ layout.append(gallery, information);
+ result.append(layout);
+}
+
 const deletingScans = new Set();
 async function deleteSavedScan(row) {
  if (deletingScans.has(row.id)) return;
@@ -86,6 +135,8 @@ async function deleteSavedScan(row) {
   state = { ...state, scans: state.scans.filter(scan => scan.id !== row.id) };
   renderHistory();
   renderTracking();
+  if (savedResultId === row.id) savedResultId = undefined;
+  renderScanResult();
   status('Scan deleted.');
  } catch (error) {
   status(error.message);
@@ -94,10 +145,10 @@ async function deleteSavedScan(row) {
   renderReports();
  }
 }
-function renderReports(){const list=$('reportList');list.replaceChildren();const filtered=state.scans.filter(row=>!$('reportFrom').value||row.created_at.slice(0,10)>=$('reportFrom').value);if(!filtered.length)list.append(node('p','No saved reports for this date range.','p-5 text-slate-500'));filtered.forEach(row=>{const card=node('article',undefined,'action-card rounded-2xl p-5 space-y-3');card.append(node('h3',new Date(row.created_at).toLocaleString(),'font-bold'),node('p',state.cases.find(c=>c.id===row.case_id)?.title||'Skin observation','text-sm font-semibold'),node('p',row.notes||'No description provided.','text-sm'),node('p',row.report.summary,'text-sm text-slate-600'));const gallery=node('div',undefined,'grid gap-3 sm:grid-cols-3');row.images.forEach(image=>{const figure=node('figure');figure.append(photo(image,'w-full h-48 object-contain rounded-xl bg-slate-50'),node('figcaption',new Date(image.captured_at).toLocaleString(),'text-xs text-slate-500 mt-2'));gallery.append(figure);});card.append(gallery,node('p',row.report.notice||'Record only; no clinical diagnosis.','text-xs text-slate-500'));const button=node('button','Download PDF','button');button.onclick=()=>rpc('pdf',{id:row.id,progression:$('reportProgression').checked}).catch(e=>status(e.message));const print=node('button','Print / Save PDF','button ml-2');print.onclick=()=>printReport(row);const deleting=deletingScans.has(row.id);const remove=node('button',deleting?'Deleting…':'Delete scan','button ml-2 border border-red-200 bg-white text-red-700');remove.disabled=deleting;remove.onclick=()=>void deleteSavedScan(row);button.disabled=deleting;print.disabled=deleting;card.append(button,print,remove);if($('reportProgression').checked){const images=allPhotos();card.append(node('p','Selected case progression: '+images.map(i=>new Date(i.captured_at).toLocaleDateString()).join(' → '),'text-sm'));}list.append(card);});}
+function renderReports(){const list=$('reportList');list.replaceChildren();const filtered=state.scans.filter(row=>!$('reportFrom').value||row.created_at.slice(0,10)>=$('reportFrom').value);if(!filtered.length)list.append(node('p','No saved reports for this date range.','p-5 text-slate-500'));filtered.forEach(row=>{const card=node('article',undefined,'action-card rounded-2xl p-5 space-y-3');card.dataset.scanId=row.id;card.tabIndex=-1;card.append(node('h3',new Date(row.created_at).toLocaleString(),'font-bold'),node('p',state.cases.find(c=>c.id===row.case_id)?.title||'Skin observation','text-sm font-semibold'),node('p',row.notes||'No description provided.','text-sm'),node('p',row.report.summary,'text-sm text-slate-600'));const gallery=node('div',undefined,'grid gap-3 sm:grid-cols-3');row.images.forEach(image=>{const figure=node('figure');figure.append(photo(image,'w-full h-48 object-contain rounded-xl bg-slate-50'),node('figcaption',new Date(image.captured_at).toLocaleString(),'text-xs text-slate-500 mt-2'));gallery.append(figure);});card.append(gallery,node('p',row.report.notice||'Record only; no clinical diagnosis.','text-xs text-slate-500'));const button=node('button','Download PDF','button');button.onclick=()=>rpc('pdf',{id:row.id,progression:$('reportProgression').checked}).catch(e=>status(e.message));const print=node('button','Print / Save PDF','button ml-2');print.onclick=()=>printReport(row);const deleting=deletingScans.has(row.id);const remove=node('button',deleting?'Deleting…':'Delete scan','button ml-2 border border-red-200 bg-white text-red-700');remove.disabled=deleting;remove.onclick=()=>void deleteSavedScan(row);button.disabled=deleting;print.disabled=deleting;card.append(button,print,remove);if($('reportProgression').checked){const images=allPhotos();card.append(node('p','Selected case progression: '+images.map(i=>new Date(i.captured_at).toLocaleDateString()).join(' → '),'text-sm'));}list.append(card);});}
 function printReport(row){const win=window.open('','_blank');if(!win){status('Allow popups to print your report.');return;}win.document.title='DermaGuard report';const root=win.document.body;root.style.cssText='font:16px sans-serif;padding:40px;line-height:1.6';root.append(node('h1','DermaGuard observation report'),node('p',new Date(row.created_at).toLocaleString()),node('p',row.notes),node('p',row.report.summary),node('p',row.report.notice));if($('reportProgression').checked)allPhotos().forEach(image=>root.append(node('p','Photo date: '+new Date(image.captured_at).toLocaleString())));row.images.forEach(image=>{const img=photo(image);img.style.cssText='display:block;width:260px;height:220px;object-fit:contain;break-inside:avoid;margin:16px 0';root.append(node('p',new Date(image.captured_at).toLocaleString()),img);});Promise.all(Array.from(root.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;}))).then(()=>{win.focus();win.print();});}
 function renderHistory(){const history=$('scanHistoryList');history.replaceChildren();if(!state.scans.length)history.append(node('p','No saved scans yet.','text-sm text-slate-500'));state.scans.forEach(row=>{const button=node('button',undefined,'w-full text-left rounded-xl border border-slate-200 p-3 space-y-2');button.append(node('strong',new Date(row.created_at).toLocaleDateString()),photo(row.images[0],'w-full h-24 object-contain rounded-lg'),node('p',row.notes||'Skin observation','text-xs'));button.onclick=()=>{selectCase(row.case_id);switchTab('reports');renderReports();};history.append(button);});}
-function apply(data){state=data;const p=state.profile;const localMode=state.capabilities?.chat_mode==='local-records';if($('chatConsent'))$('chatConsent').parentElement.hidden=localMode;if($('trackingConsent'))$('trackingConsent').parentElement.hidden=localMode;if(localMode&&!lastQuestions.has('dashboardAiText')&&$('dashboardAiText'))$('dashboardAiText').textContent='Local record guide is ready. Ask about scans, saved dates, reports, nearby care or your profile. Generative AI is not connected yet.';setLanguage(p.language||'EN',false);selectedCase=selectedCase||state.cases[0]?.id||'';const values={Name:p.display_name,Email:p.email,Phone:p.phone,City:p.city,Street:p.street,Notes:p.notes,Lang:lang};Object.entries(values).forEach(([key,value])=>{const el=$('inputPatient'+key);if(el){el.value=value||'';if(key==='Email')el.readOnly=true;}});['sidebarPatientName','reportPatientName'].forEach(id=>{if($(id))$(id).textContent=p.display_name||'Your profile';});$('welcomePatientName').textContent=p.display_name?.trim().split(/\s+/)[0]||'there';$('sidebarPatientLocation').textContent=p.city||'Add your location';document.querySelectorAll('img[alt="Patient"],#sidebarAvatar,#profileAvatarPreview').forEach(img=>{img.src=p.avatar||'/images/dermaguard-logo.svg';});const select=$('caseSelect');select.replaceChildren(new Option('New skin observation',''),...state.cases.map(c=>new Option(c.title,c.id)));select.value=selectedCase;renderHistory();renderTracking();renderReports();}
+function apply(data){state=data;const p=state.profile;const localMode=state.capabilities?.chat_mode==='local-records';if($('chatConsent'))$('chatConsent').parentElement.hidden=localMode;if($('trackingConsent'))$('trackingConsent').parentElement.hidden=localMode;if(localMode&&!lastQuestions.has('dashboardAiText')&&$('dashboardAiText'))$('dashboardAiText').textContent='Local record guide is ready. Ask about scans, saved dates, reports, nearby care or your profile. Generative AI is not connected yet.';setLanguage(p.language||'EN',false);selectedCase=selectedCase||state.cases[0]?.id||'';const values={Name:p.display_name,Email:p.email,Phone:p.phone,City:p.city,Street:p.street,Notes:p.notes,Lang:lang};Object.entries(values).forEach(([key,value])=>{const el=$('inputPatient'+key);if(el){el.value=value||'';if(key==='Email')el.readOnly=true;}});['sidebarPatientName','reportPatientName'].forEach(id=>{if($(id))$(id).textContent=p.display_name||'Your profile';});$('welcomePatientName').textContent=p.display_name?.trim().split(/\s+/)[0]||'there';$('sidebarPatientLocation').textContent=p.city||'Add your location';document.querySelectorAll('img[alt="Patient"],#sidebarAvatar,#profileAvatarPreview').forEach(img=>{img.src=p.avatar||'/images/dermaguard-logo.svg';});const select=$('caseSelect');select.replaceChildren(new Option('New skin observation',''),...state.cases.map(c=>new Option(c.title,c.id)));select.value=selectedCase;renderHistory();renderTracking();renderReports();renderScanResult();}
 let profileSaving=false;async function savePatientDetails(){if(profileSaving)return;profileSaving=true;try{status('Saving profile…');const input=id=>$(id).value.trim();const data=await rpc('profile',{name:input('inputPatientName'),city:input('inputPatientCity'),phone:input('inputPatientPhone'),street:input('inputPatientStreet'),notes:input('inputPatientNotes'),language:input('inputPatientLang'),avatar_path:state.profile.avatar_path,file:$('profileAvatarInput').files[0]});apply(data);profileDirty=false;$('profileAvatarInput').value='';status('Profile saved.');}catch(error){status(error.message);}finally{profileSaving=false;}}
 let photoCheckRevision = 0;
 function clearPhotoSelection(message = 'Choose photos to preview and check them.') {
@@ -169,7 +220,49 @@ async function handleImageUpload(event) {
   clearPhotoSelection(error.message);
  }
 }
-async function saveScanToHistory(){if(saving)return;if(!files.length){status('Choose at least one skin photo.');return;}if(!$('skinConsent').checked){status('Confirm these photos show the skin area you want to record.');return;}const dates=Array.from(document.querySelectorAll('[data-photo-date]')).map(el=>new Date(el.value));if(dates.some(d=>!Number.isFinite(d.getTime())||d>Date.now())){status('Enter valid photo dates, not in the future.');return;}saving=true;$('saveScan').disabled=true;$('chooseScanPhotos').disabled=true;try{status('Saving private photos…');const data=await rpc('scan',{files,dates:dates.map(d=>d.toISOString()),case_id:$('caseSelect').value||null,title:$('caseTitle').value.trim(),notes:$('patientSymptomInput').value.trim(),request_id:scanRequestId});selectedCase=data.scans[0]?.case_id||selectedCase;apply(data);clearPhotoSelection();status('Observation saved.');switchTab('reports');}catch(error){status(error.message);}finally{saving=false;$('saveScan').disabled=!files.length;$('chooseScanPhotos').disabled=false;}}
+async function saveScanToHistory() {
+ if (saving) return;
+ if (!files.length) { status('Choose at least one skin photo.'); return; }
+ if (!$('skinConsent').checked) { status('Confirm these photos show the skin area you want to record.'); return; }
+ const dates = Array.from(document.querySelectorAll('[data-photo-date]')).map(input => new Date(input.value));
+ if (dates.some(date => !Number.isFinite(date.getTime()) || date > Date.now())) {
+  status('Enter valid photo dates, not in the future.');
+  return;
+ }
+ saving = true;
+ $('saveScan').disabled = true;
+ $('chooseScanPhotos').disabled = true;
+ const requestId = scanRequestId;
+ try {
+  status('Saving private photos…');
+  const data = await rpc('scan', {
+   files,
+   dates: dates.map(date => date.toISOString()),
+   case_id: $('caseSelect').value || null,
+   title: $('caseTitle').value.trim(),
+   notes: $('patientSymptomInput').value.trim(),
+   request_id: requestId,
+  });
+  const saved = data.scans.find(scan => scan.request_id === requestId);
+  if (saved) {
+   savedResultId = saved.id;
+   selectedCase = saved.case_id;
+  }
+  apply(data);
+  clearPhotoSelection();
+  $('patientSymptomInput').value = '';
+  $('caseTitle').value = '';
+  status('Observation saved.');
+  const result = $('scanResult');
+  if (saved && !$('view-scan').classList.contains('hidden')) result.focus();
+ } catch (error) {
+  status(error.message);
+ } finally {
+  saving = false;
+  $('saveScan').disabled = !files.length;
+  $('chooseScanPhotos').disabled = false;
+ }
+}
 let loadedCity='',clinicLoading=false;
 async function loadClinics(){
  const city=state.profile.city;const list=$('clinicList');
@@ -221,6 +314,12 @@ document.addEventListener('DOMContentLoaded',async()=>{
  oldPicker.replaceWith(picker, fileInput);
  $('patientSymptomInput').value = '';
  const panel=$('uploadedImagePreview').closest('.grid');const findings=panel.children[1];findings.replaceChildren(node('h3','Private skin record','font-bold text-xl'),node('p','Choose 1–3 photos of the same area. DermaGuard checks the files and saves a private observation. Clinical image analysis is unavailable.','text-sm text-slate-600'));const select=node('select',undefined,'field');select.id='caseSelect';select.onchange=()=>selectCase(select.value);const title=node('input',undefined,'field');title.id='caseTitle';title.placeholder='Name for a new skin observation';title.maxLength=120;const dates=node('div',undefined,'space-y-3');dates.id='photoDates';const confirm=node('label','These photos show the skin area I want to record.','text-sm');const check=node('input');check.id='skinConsent';check.type='checkbox';confirm.prepend(check);const save=node('button','Save observation','button mt-4');save.id='saveScan';save.onclick=saveScanToHistory;findings.append(select,title,dates,confirm,save);$('scanFindingNote').role='status';clearPhotoSelection();
+ const scanResult = node('section', undefined, 'action-card rounded-2xl p-5 space-y-3');
+ scanResult.id = 'scanResult';
+ scanResult.tabIndex = -1;
+ scanResult.setAttribute('aria-label', 'Saved observation result');
+ scanResult.hidden = true;
+ panel.after(scanResult);
  const progression=$('view-progression');const metric=Array.from(progression.children).find(el=>el.textContent.includes('Diameter Expansion'));if(metric)metric.replaceChildren(node('p','Measurements and image-based comparisons are unavailable until a validated model is connected.','text-sm text-slate-500'));$('progAiResponse').textContent='Ask about the dates and notes in your selected case.';const elapsed=node('p',undefined,'text-sm');elapsed.id='elapsedTime';progression.prepend(elapsed);
  document.querySelectorAll('.tracking-card').forEach(card=>{card.onclick=()=>document.querySelectorAll('.tracking-card').forEach(c=>c.setAttribute('aria-pressed',String(c===card)));});
  const trackingConsent=node('label',' Allow selected-case notes to be sent to the AI provider for replies.','block text-xs text-slate-600');const consentCopy=node('input');consentCopy.type='checkbox';consentCopy.id='trackingConsent';trackingConsent.prepend(consentCopy);$('progAiResponse').parentElement.before(trackingConsent);consentCopy.onchange=()=>{$('chatConsent').checked=consentCopy.checked;};
