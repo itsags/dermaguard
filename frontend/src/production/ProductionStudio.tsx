@@ -48,10 +48,21 @@ export function ProductionStudio({session}:{session:Session}) {
      let caseId=payload.case_id;
      if(!caseId){const {data,error}=await supabase.from('skin_cases').insert({title:payload.title||'Skin observation',body_area:'Not specified'}).select().single();if(error)throw error;caseId=data.id;}
      const images=files.map((_,index)=>({path:`${session.user.id}/${caseId}/${makeId()}`,captured_at:payload.dates[index]}));
+     const progress=(label:string,value?:number)=>event.source===frame.current?.contentWindow &&
+      frame.current?.contentWindow?.postMessage({rpcProgress:true,id,label,value},location.origin);
+     let uploaded=0;
+     progress('Uploading photos',0);
      await saveScanPhotos(
       images,
-      async (path,index)=>{const {error}=await bucket.upload(path,files[index]);if(error)throw error;},
-      photos=>api('/scans',{case_id:caseId,request_id:payload.request_id,notes:payload.notes,images:photos}),
+      async (path,index)=>{
+       const {error}=await bucket.upload(path,files[index]);
+       if(error)throw error;
+       progress('Uploading photos', Math.round(100 * ++uploaded / images.length));
+      },
+      photos=>{
+       progress('Checking photos and preparing report');
+       return api('/scans',{case_id:caseId,request_id:payload.request_id,notes:payload.notes,images:photos});
+      },
       paths=>bucket.remove(paths),
      );
      result=await load();
