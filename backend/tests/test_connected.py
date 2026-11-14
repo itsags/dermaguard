@@ -17,6 +17,7 @@ def login():
 def test_private_routes_require_login():
  for path in ['/api/v1/scans','/api/v1/scans/'+str(uuid4())+'/pdf']:
   assert client.get(path).status_code==401
+ assert client.delete('/api/v1/scans/'+str(uuid4())).status_code==401
  assert client.post('/api/v1/chat',json={'message':'hello'}).status_code==401
 def test_empty_and_oversized_scan_rejected(login):
  p={'case_id':str(uuid4()),'request_id':str(uuid4()),'images':[]}
@@ -30,6 +31,28 @@ def test_other_users_report_hidden(login):
  with patch('app.connected.database',new=AsyncMock(return_value=[])) as db:
   assert client.get('/api/v1/scans/'+str(uuid4())).status_code==404
   assert 'user_id=eq.user-one' in db.call_args.args[3]
+
+def test_delete_scan_only_removes_unshared_photos(login):
+ scan_id, case_id = uuid4(), uuid4()
+ prefix = f'user-one/{case_id}/'
+ row = {'case_id': str(case_id), 'images': [{'path': prefix + name} for name in ('shared', 'private')]}
+ with patch('app.connected.database', new=AsyncMock(side_effect=[[row], [{'id': 'other'}], [], [], [row]])) as db, patch('app.connected.remove_scan_photos', new=AsyncMock()) as remove:
+  assert client.delete(f'/api/v1/scans/{scan_id}').status_code == 204
+  remove.assert_awaited_once_with([prefix + 'private'])
+  assert db.call_args.args == ('DELETE', 'scan_records', 'user-one', f'?id=eq.{scan_id}&user_id=eq.user-one')
+
+def test_delete_scan_keeps_record_for_storage_retry(login):
+ row = {'case_id': 'case', 'images': [{'path': 'user-one/case/private'}]}
+ with patch('app.connected.database', new=AsyncMock(side_effect=[[row], [], []])) as db, patch('app.connected.remove_scan_photos', new=AsyncMock(side_effect=HTTPException(503))):
+  assert client.delete(f'/api/v1/scans/{uuid4()}').status_code == 503
+  assert all(call.args[0] == 'GET' for call in db.await_args_list)
+
+def test_delete_scan_hides_other_accounts(login):
+ path = f'/api/v1/scans/{uuid4()}'
+ with patch('app.connected.database', new=AsyncMock(return_value=[])) as db, patch('app.connected.remove_scan_photos', new=AsyncMock()) as remove:
+  assert client.delete(path).status_code == 204
+  assert db.await_count == 1 and 'user_id=eq.user-one' in db.call_args.args[3]
+  remove.assert_not_awaited()
 def test_create_checks_photos_and_records_unavailable_model(login):
  cid=str(uuid4());p={'case_id':cid,'request_id':str(uuid4()),'images':[{'path':'user-one/'+cid+'/a','captured_at':'2026-11-01T00:00:00Z'}]}
  with patch('app.connected.database',new=AsyncMock(side_effect=[[{'id':cid}],[],[{'id':'saved'}]])) as db,patch('app.connected.validate_stored_image',new=AsyncMock()) as validate:

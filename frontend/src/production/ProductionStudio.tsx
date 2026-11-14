@@ -13,11 +13,12 @@ export function ProductionStudio({session}:{session:Session}) {
   const bucket=supabase.storage.from('dermaguard-photos');
   let latest:any;
   const signed=new Map<string,{url:string;expires:number}>();
-  async function api(path:string,body?:unknown,binary=false){
+  async function api(path:string,body?:unknown,binary=false,method=body?'POST':'GET'){
    const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw new Error('Please sign in again.');
    const base=import.meta.env.VITE_API_URL;if(!base)throw new Error('Backend URL is not configured.');
-   const response=await fetch(base.replace(/\/$/,'')+'/api/v1'+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+data.session.access_token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
+   const response=await fetch(base.replace(/\/$/,'')+'/api/v1'+path,{method,headers:{Authorization:'Bearer '+data.session.access_token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
    if(!response.ok){const detail=await response.json().catch(()=>({}));throw new Error(detail.detail||'Request failed.');}
+   if(response.status===204)return;
    return binary?response.blob():response.json();
   }
   async function sign(path:string){const cached=signed.get(path);if(cached&&cached.expires>Date.now())return cached.url;const {data,error}=await bucket.createSignedUrl(path,1800);if(error)throw error;signed.set(path,{url:data.signedUrl,expires:Date.now()+1500000});return data.signedUrl;}
@@ -49,6 +50,12 @@ export function ProductionStudio({session}:{session:Session}) {
       await api('/scans',{case_id:caseId,request_id:payload.request_id,notes:payload.notes,images});
      }catch(error){/* Keep uploads on uncertain server responses: deleting could corrupt a committed record. */throw error;}
      result=await load();
+    }else if(action==='deleteScan'){
+     await api(`/scans/${encodeURIComponent(payload.id)}`,undefined,false,'DELETE');
+     const deleted=latest?.scans.find((row:{id:string})=>row.id===payload.id);
+     deleted?.images.forEach((image:{path:string})=>signed.delete(image.path));
+     if(latest)latest={...latest,scans:latest.scans.filter((row:{id:string})=>row.id!==payload.id)};
+     result={ok:true};
     }else if(action==='clinics')result=await api('/clinics?city='+encodeURIComponent(payload.city));
     else if(action==='chat')result=await api('/chat',payload);
     else if(action==='pdf'){const blob=await api(`/scans/${encodeURIComponent(payload.id)}/pdf?progression=${Boolean(payload.progression)}`,undefined,true) as Blob;const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='dermaguard-report.pdf';link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);result={ok:true};}

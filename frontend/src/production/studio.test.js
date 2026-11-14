@@ -32,6 +32,29 @@ it('renders saved photos in reports and removes the waiting label for occupied t
  dom.window.close();
 });
 
+it('removes a scan from reports, history and tracking only after confirmation and API success',async()=>{
+ let request;
+ const scan={id:'scan',case_id:'case',created_at:'2026-11-09T10:00:00Z',report:{summary:'Recorded'},images:[{url:'https://example.com/private-photo',captured_at:'2026-11-09T10:00:00Z'}]};
+ const dom=await boot({...base,cases:[{id:'case',title:'Skin observation'}],scans:[scan]},message=>{
+  if(message.action==='deleteScan')request=message;
+ });
+ const {document}=dom.window;
+ const remove=()=>Array.from(document.querySelectorAll('#reportList button')).find(button=>button.textContent==='Delete scan');
+ dom.window.confirm=()=>false;
+ remove().click();
+ expect(request).toBeUndefined();
+ dom.window.confirm=()=>true;
+ remove().click();
+ expect(request.payload.id).toBe('scan');
+ expect(document.querySelectorAll('#reportList img')).toHaveLength(1);
+ dom.window.dispatchEvent(new dom.window.MessageEvent('message',{origin:'http://localhost',source:dom.window.parent,data:{rpcResult:true,id:request.id,result:{ok:true}}}));
+ await Promise.resolve();
+ expect(document.querySelector('#reportList').textContent).toContain('No saved reports');
+ expect(document.querySelector('#scanHistoryList').textContent).toContain('No saved scans');
+ expect(document.querySelectorAll('.tracking-image img')).toHaveLength(0);
+ dom.window.close();
+});
+
 it('shows the missing provider message in the visible dashboard chat',async()=>{
  const dom=await boot({...base,capabilities:{chat:false}}),doc=dom.window.document;
  doc.querySelector('#promptInput').value='Explain my record';dom.window.runDashboardPrompt();
