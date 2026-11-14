@@ -11,6 +11,37 @@ async function boot(data,onRequest=()=>{}){
  return dom;
 }
 const base={profile:{display_name:'Test Person',city:'',email:'test@example.com'},cases:[],scans:[]};
+it('checks decoded photos before enabling save and clears a rejected replacement',async()=>{
+ const dom=await boot(base),win=dom.window,doc=win.document;
+ const picker=doc.querySelector('#scanFileInput'), save=doc.querySelector('#saveScan');
+ const click=win.MouseEvent;
+ let opened=false;
+ picker.addEventListener('click',()=>{opened=true;});
+ doc.querySelector('#chooseScanPhotos').dispatchEvent(new click('click'));
+ expect(opened).toBe(true);
+ win.URL.createObjectURL=()=> 'blob:photo';
+ win.URL.revokeObjectURL=()=>{};
+ let width=640;
+ win.Image=class {
+  get naturalWidth(){return width;}
+  get naturalHeight(){return 480;}
+  set src(_url){queueMicrotask(()=>this.onload());}
+ };
+ const file=new win.File(['image bytes'],'sample.jpg',{type:'image/jpeg'});
+ Object.defineProperty(picker,'files',{value:[file]});
+ picker.dispatchEvent(new win.Event('change'));
+ expect(save.disabled).toBe(true);
+ await new Promise(resolve=>setTimeout(resolve,0));
+ expect(save.disabled).toBe(false);
+ expect(doc.querySelector('#scanFindingNote').textContent).toContain('640 × 480');
+ width=64;
+ picker.dispatchEvent(new win.Event('change'));
+ await new Promise(resolve=>setTimeout(resolve,0));
+ expect(save.disabled).toBe(true);
+ expect(doc.querySelector('#uploadedImagePreview').hasAttribute('src')).toBe(false);
+ expect(doc.querySelector('#scanFindingNote').textContent).toContain('at least 128');
+ win.close();
+});
 it('loads empty account states and allows dismissing notices',async()=>{
  const dom=await boot(base),doc=dom.window.document;
  expect(doc.querySelector('#welcomePatientName').textContent).toBe('Test');
