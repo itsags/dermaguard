@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from io import BytesIO
+from urllib.parse import quote
 from uuid import UUID
 import json
 import re
@@ -38,10 +39,14 @@ async def owned_case(case_id,user_id):
     rows=await database('GET','skin_cases',user_id,f'?id=eq.{case_id}&user_id=eq.{user_id}')
     if not rows: raise HTTPException(404,'Case not found')
 
-async def validate_stored_image(path,user_id,case_id):
+def check_photo_path(path, user_id, case_id):
     prefix=f'{user_id}/{case_id}/'
     if not path.startswith(prefix) or not re.fullmatch(r'[A-Za-z0-9._-]+',path[len(prefix):]) or '..' in path:
         raise HTTPException(403,'Invalid private photo path')
+
+
+async def validate_stored_image(path,user_id,case_id):
+    check_photo_path(path, user_id, case_id)
     headers={'apikey':settings.supabase_service_role_key,'Authorization':'Bearer '+settings.supabase_service_role_key}
     try:
         async with httpx.AsyncClient(timeout=20) as client:
@@ -81,6 +86,52 @@ async def scan(scan_id:UUID,user_id:str=Depends(current_user_id)):
     rows=await database('GET','scan_records',user_id,f'?id=eq.{scan_id}&user_id=eq.{user_id}')
     if not rows:raise HTTPException(404,'Report not found')
     return rows[0]
+
+
+async def remove_scan_photos(paths):
+    if not paths:
+        return
+    key = settings.supabase_service_role_key
+    headers = {'apikey': key, 'Authorization': 'Bearer ' + key}
+    url = settings.supabase_url + '/storage/v1/object/dermaguard-photos'
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.request('DELETE', url, headers=headers, json={'prefixes': paths})
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(503, 'Could not remove the scan photos. Try deleting the scan again.') from exc
+
+
+@router.delete('/scans/{scan_id}', status_code=204)
+async def delete_scan(scan_id: UUID, user_id: str = Depends(current_user_id)):
+    scope = f'?id=eq.{scan_id}&user_id=eq.{user_id}'
+    rows = await database('GET', 'scan_records', user_id, scope)
+    if not rows:
+        return Response(status_code=204)
+
+    row = rows[0]
+    paths = []
+    for path in dict.fromkeys(image['path'] for image in row['images']):
+        check_photo_path(path, user_id, row['case_id'])
+        contains = quote(json.dumps([{'path': path}], separators=(',', ':')), safe='')
+        other_scans = await database(
+            'GET', 'scan_records', user_id,
+            f'?user_id=eq.{user_id}&id=neq.{scan_id}&images=cs.{contains}&select=id&limit=1',
+        )
+        if other_scans:
+            continue
+        observations = await database(
+            'GET', 'observations', user_id,
+            f'?user_id=eq.{user_id}&photo_path=eq.{quote(path, safe="")}&select=id&limit=1',
+        )
+        if not observations:
+            paths.append(path)
+
+    # Keep the row available for retries if storage deletion fails or times out.
+    await remove_scan_photos(paths)
+    await database('DELETE', 'scan_records', user_id, scope)
+    return Response(status_code=204)
+
 
 @router.get('/scans/{scan_id}/pdf')
 async def pdf(scan_id:UUID,progression:bool=False,user_id:str=Depends(current_user_id)):
